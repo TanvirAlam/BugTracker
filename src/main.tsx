@@ -2,28 +2,50 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { Bell, Bug, CheckCircle2, ChevronDown, Filter, GitPullRequest, HelpCircle, MoreVertical, Search, Upload, Clock3, AlertCircle } from 'lucide-react';
 import './styles.css';
-import { PROJECTS } from './projects';
+import { PROJECTS, type ProjectId } from './projects';
 
 type BugStatus = 'Open' | 'In Progress' | 'Review' | 'Closed';
-type Severity = 'Low' | 'Medium' | 'High';
+type Severity = 'High' | 'Medium' | 'Low';
 
-type BugRow = {
-  id: string;
+// A GitHub issue as returned by GET /api/bugs?project=<id>.
+type IssueRow = {
+  number: number;
   title: string;
-  repository: string;
-  branch: string;
-  severity: Severity;
-  status: BugStatus;
-  updated: string;
+  state: string; // 'open' | 'closed'
+  labels: string[];
+  url: string;
+  updatedAt: string;
 };
 
-const bugRows: BugRow[] = [
-  { id: 'BUG-125', title: 'Weather data not loading on home page', repository: 'Foodime', branch: 'stage', severity: 'High', status: 'Open', updated: '2h ago' },
-  { id: 'BUG-124', title: 'Search functionality not working on mobile', repository: 'Soundmade', branch: 'develop', severity: 'Medium', status: 'In Progress', updated: '4h ago' },
-  { id: 'BUG-123', title: 'Login redirect loop on stage environment', repository: 'WeWaive', branch: 'staging', severity: 'High', status: 'Open', updated: '6h ago' },
-  { id: 'BUG-122', title: 'Add to cart button is not responsive', repository: 'Foodime', branch: 'main', severity: 'Medium', status: 'Review', updated: '1d ago' },
-  { id: 'BUG-121', title: 'UI breaking on iOS Safari', repository: 'WeWaive', branch: 'main', severity: 'Low', status: 'Open', updated: '1d ago' },
-];
+const STATUS_TABS: BugStatus[] = ['Open', 'In Progress', 'Review', 'Closed'];
+
+function deriveStatus(issue: IssueRow): BugStatus {
+  if (issue.state === 'closed') return 'Closed';
+  const labels = issue.labels.map((l) => l.toLowerCase());
+  if (labels.some((l) => l.includes('in progress'))) return 'In Progress';
+  if (labels.some((l) => l.includes('review'))) return 'Review';
+  return 'Open';
+}
+
+function deriveSeverity(issue: IssueRow): Severity | null {
+  const labels = issue.labels.map((l) => l.toLowerCase());
+  if (labels.some((l) => l === 'severity:high' || l === 'high')) return 'High';
+  if (labels.some((l) => l === 'severity:medium' || l === 'medium')) return 'Medium';
+  if (labels.some((l) => l === 'severity:low' || l === 'low')) return 'Low';
+  return null;
+}
+
+function timeAgo(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const secs = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
 
 type FormResult = { ok: boolean; message: string; url?: string };
 
@@ -39,6 +61,36 @@ function App() {
   const [autoCreate, setAutoCreate] = React.useState(true);
   const [submitting, setSubmitting] = React.useState(false);
   const [result, setResult] = React.useState<FormResult | null>(null);
+  const [bugs, setBugs] = React.useState<IssueRow[]>([]);
+  const [bugsLoading, setBugsLoading] = React.useState(false);
+  const [bugsError, setBugsError] = React.useState<string | null>(null);
+  const [activeTab, setActiveTab] = React.useState<'All' | BugStatus>('All');
+
+  const loadBugs = React.useCallback(async (projectId: string) => {
+    if (!projectId) {
+      setBugs([]);
+      setBugsError(null);
+      setBugsLoading(false);
+      return;
+    }
+    setBugsLoading(true);
+    setBugsError(null);
+    try {
+      const res = await fetch(`/api/bugs?project=${encodeURIComponent(projectId)}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Failed to load issues (${res.status}).`);
+      setBugs(Array.isArray(data.issues) ? data.issues : []);
+    } catch (err) {
+      setBugs([]);
+      setBugsError(err instanceof Error ? err.message : 'Failed to load issues.');
+    } finally {
+      setBugsLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    loadBugs(project);
+  }, [project, loadBugs]);
 
   async function createBug() {
     setResult(null);
@@ -61,6 +113,7 @@ function App() {
       } else {
         setResult({ ok: true, message: `Bug filed in ${data.repository} as issue #${data.number}.`, url: data.url });
         setTitle(''); setDescription(''); setSteps('');
+        loadBugs(project);
       }
     } catch (err) {
       setResult({ ok: false, message: err instanceof Error ? err.message : 'Network error \u2014 is the server running?' });
@@ -83,7 +136,7 @@ function App() {
           <p>Report a bug and auto-create a GitHub issue in the selected repository.</p>
 
           <div className="grid two">
-            <label>Project / Repository *<select value={project} onChange={e => setProject(e.target.value)}><option value="">Select repository</option>{PROJECTS.map(p => <option key={p.id} value={p.id}>{p.name} — {p.owner}/{p.repo}</option>)}</select></label>
+            <label>Project / Repository *<select value={project} onChange={e => setProject(e.target.value)}><option value="">Select repository</option>{Object.entries(PROJECTS).map(([id, p]) => <option key={id} value={id}>{p.name} — {p.repo}</option>)}</select></label>
             <label>Environment *<div className="segmented"><button type="button" className={environment === 'Stage' ? 'active' : ''} onClick={() => setEnvironment('Stage')}>Stage</button><button type="button" className={environment === 'Live' ? 'active' : ''} onClick={() => setEnvironment('Live')}>Live</button></div></label>
           </div>
 
@@ -105,8 +158,45 @@ function App() {
 
         <section className="panel bugs-panel">
           <div className="panel-head"><h2>My Bugs</h2><div><a>View All</a><button className="filter"><Filter size={16} /> Filters</button></div></div>
-          <div className="tabs"><span>All <b>25</b></span><span className="selected">Open <b>8</b></span><span>In Progress <b>3</b></span><span>Review <b>2</b></span><span>Closed <b>12</b></span></div>
-          <table><thead><tr><th>Bug ID</th><th>Title</th><th>Repository</th><th>Severity</th><th>Status</th><th>Updated</th><th></th></tr></thead><tbody>{bugRows.map(b => <tr key={b.id}><td className="bug-id" data-label="Bug ID">{b.id}</td><td className="bug-title" data-label="Title"><strong>{b.title}</strong></td><td data-label="Repository"><span className="repo-cell">{b.repository}<small>{b.branch}</small></span></td><td data-label="Severity"><span className={`pill ${b.severity.toLowerCase()}`}>{b.severity}</span></td><td data-label="Status"><span className="status">{b.status}</span></td><td data-label="Updated">{b.updated}</td><td className="row-actions"><MoreVertical size={17} /></td></tr>)}</tbody></table>
+          <div className="tabs">{(['All', ...STATUS_TABS] as const).map((tab) => {
+            const count = tab === 'All' ? bugs.length : bugs.filter((b) => deriveStatus(b) === tab).length;
+            return <span key={tab} className={activeTab === tab ? 'selected' : ''} onClick={() => setActiveTab(tab)}>{tab} <b>{count}</b></span>;
+          })}</div>
+          <table>
+            <thead><tr><th>Bug ID</th><th>Title</th><th>Repository</th><th>Severity</th><th>Status</th><th>Updated</th><th></th></tr></thead>
+            <tbody>
+              {!project ? (
+                <tr><td className="bugs-note" colSpan={7}>Select a project to view its issues.</td></tr>
+              ) : bugsLoading ? (
+                <tr><td className="bugs-note" colSpan={7}>Loading issues…</td></tr>
+              ) : bugsError ? (
+                <tr><td className="bugs-note err" colSpan={7}>{bugsError}</td></tr>
+              ) : (
+                (() => {
+                  const rows = activeTab === 'All' ? bugs : bugs.filter((b) => deriveStatus(b) === activeTab);
+                  if (rows.length === 0) {
+                    return <tr><td className="bugs-note" colSpan={7}>No issues found.</td></tr>;
+                  }
+                  return rows.map((b) => {
+                    const status = deriveStatus(b);
+                    const sev = deriveSeverity(b);
+                    const env = b.labels.map((l) => l.toLowerCase()).find((l) => l === 'stage' || l === 'live');
+                    return (
+                      <tr key={b.number}>
+                        <td className="bug-id" data-label="Bug ID">#{b.number}</td>
+                        <td className="bug-title" data-label="Title"><strong><a href={b.url} target="_blank" rel="noreferrer">{b.title}</a></strong></td>
+                        <td data-label="Repository"><span className="repo-cell">{PROJECTS[project as ProjectId]?.name ?? project}<small>{env ?? '—'}</small></span></td>
+                        <td data-label="Severity">{sev ? <span className={`pill ${sev.toLowerCase()}`}>{sev}</span> : <span className="muted">—</span>}</td>
+                        <td data-label="Status"><span className="status">{status}</span></td>
+                        <td data-label="Updated">{timeAgo(b.updatedAt)}</td>
+                        <td className="row-actions"><a href={b.url} target="_blank" rel="noreferrer" aria-label="Open issue"><MoreVertical size={17} /></a></td>
+                      </tr>
+                    );
+                  });
+                })()
+              )}
+            </tbody>
+          </table>
         </section>
 
         <section className="stats">
