@@ -1,0 +1,8 @@
+node_modules
+dist
+*.local
+
+# Local env files — never commit your GitHub token
+.env
+.env.*
+!.env.example
