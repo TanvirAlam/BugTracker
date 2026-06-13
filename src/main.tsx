@@ -125,9 +125,7 @@ function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand"><div className="logo"><Bug size={23} /></div><span>BugTracker</span></div>
-        <div className="search"><Search size={18} /><input placeholder="Search bugs by title, ID, status, or repository..." /><kbd>⌘ K</kbd></div>
-        <div className="actions"><div className="bell"><Bell size={20} /><span>3</span></div><HelpCircle size={20} /><div className="avatar">UR</div><div className="who"><strong>Urmi</strong><small>Tester</small></div><ChevronDown size={16} /></div>
+        <div className="brand"><div className="logo"><Bug size={23} /></div><span>XIIA::BugTracker</span></div>
       </header>
 
       <main className="container">
@@ -198,25 +196,9 @@ function App() {
             </tbody>
           </table>
         </section>
-
-        <section className="stats">
-          <Stat icon={<Bug />} label="Total Bugs" value="25" delta="↑ 12% from last week" />
-          <Stat icon={<AlertCircle />} label="Open Bugs" value="8" delta="↓ 5% from last week" />
-          <Stat icon={<Clock3 />} label="In Progress" value="3" delta="↑ 8% from last week" />
-          <Stat icon={<CheckCircle2 />} label="Closed" value="12" delta="↑ 20% from last week" />
-        </section>
-
-        <section className="bottom-grid">
-          <ChartCard title="Bugs by Repository" items={['Foodime 10 (40%)', 'Soundmade 7 (28%)', 'WeWaive 8 (32%)']} />
-          <ChartCard title="Bugs by Severity" items={['High 9 (36%)', 'Medium 10 (40%)', 'Low 6 (24%)']} />
-          <div className="panel activity"><h3>Recent Activity</h3><p><b>UR</b> Urmi created BUG-125 in Foodime <span>2h ago</span></p><p><b>MS</b> Muksana moved BUG-123 to In Progress <span>4h ago</span></p><p><b>UR</b> Urmi closed BUG-120 <span>1d ago</span></p></div>
-        </section>
       </main>
     </div>
   );
 }
-
-function Stat({ icon, label, value, delta }: { icon: React.ReactNode; label: string; value: string; delta: string }) { return <div className="panel stat"><div className="stat-icon">{icon}</div><div><span>{label}</span><strong>{value}</strong><small>{delta}</small></div></div>; }
-function ChartCard({ title, items }: { title: string; items: string[] }) { return <div className="panel chart"><h3>{title}</h3><div className="donut" /><ul>{items.map(i => <li key={i}>{i}</li>)}</ul></div>; }
 
 createRoot(document.getElementById('root')!).render(<App />);
