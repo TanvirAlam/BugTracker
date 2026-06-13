@@ -8,6 +8,8 @@ import {
   Filter,
   GitPullRequest,
   HelpCircle,
+  Lock,
+  LogOut,
   MoreVertical,
   Search,
   Upload,
@@ -31,6 +33,17 @@ type IssueRow = {
 };
 
 const STATUS_TABS: BugStatus[] = ['Open', 'In Progress', 'Review', 'Closed'];
+
+// Simple tester gate: the tester picks their project and enters this shared
+// password; the selected project is then the only one they can see / file to.
+// NOTE: this is a lightweight client-side gate (the password ships in the
+// browser bundle), not real server-side authentication.
+const TESTER_PASSWORD = 'XIIA.Tester.2026$';
+const AUTH_STORAGE_KEY = 'bugtracker.tester.project';
+
+function isProjectId(value: string | null): value is ProjectId {
+  return value != null && Object.prototype.hasOwnProperty.call(PROJECTS, value);
+}
 
 function deriveStatus(issue: IssueRow): BugStatus {
   if (issue.state === 'closed') return 'Closed';
@@ -62,8 +75,8 @@ function timeAgo(iso: string): string {
 
 type FormResult = { ok: boolean; message: string; url?: string };
 
-function App() {
-  const [project, setProject] = React.useState('');
+function Dashboard({ projectId, onLogout }: { projectId: ProjectId; onLogout: () => void }) {
+  const project = projectId;
   const [environment, setEnvironment] = React.useState<'Stage' | 'Live'>('Stage');
   const [title, setTitle] = React.useState('');
   const [description, setDescription] = React.useState('');
@@ -163,6 +176,15 @@ function App() {
           </div>
           <span>XIIA::BugTracker</span>
         </div>
+        <div className="session">
+          <div className="who">
+            <span>Tester</span>
+            <small>{PROJECTS[projectId].name}</small>
+          </div>
+          <button type="button" className="logout" onClick={onLogout}>
+            <LogOut size={16} /> Logout
+          </button>
+        </div>
       </header>
 
       <main className="container">
@@ -172,15 +194,13 @@ function App() {
 
           <div className="grid two">
             <label>
-              Project / Repository *
-              <select value={project} onChange={(e) => setProject(e.target.value)}>
-                <option value="">Select repository</option>
-                {Object.entries(PROJECTS).map(([id, p]) => (
-                  <option key={id} value={id}>
-                    {p.name} — {p.repo}
-                  </option>
-                ))}
-              </select>
+              Project / Repository
+              <div className="locked-field" title="You are logged in to this project">
+                <span>
+                  {PROJECTS[projectId].name} — {PROJECTS[projectId].repo}
+                </span>
+                <Lock size={15} />
+              </div>
             </label>
             <label>
               Environment *
@@ -394,4 +414,91 @@ function App() {
   );
 }
 
-createRoot(document.getElementById('root')!).render(<App />);
+function LoginScreen({ onLogin }: { onLogin: (projectId: ProjectId) => void }) {
+  const [projectId, setProjectId] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [error, setError] = React.useState<string | null>(null);
+
+  function submit() {
+    if (!projectId) {
+      setError('Please select your project.');
+      return;
+    }
+    if (password !== TESTER_PASSWORD) {
+      setError('Incorrect password. Please try again.');
+      return;
+    }
+    setError(null);
+    onLogin(projectId as ProjectId);
+  }
+
+  return (
+    <div className="login-wrap">
+      <div className="panel login-card">
+        <div className="brand login-brand">
+          <div className="logo">
+            <Bug size={23} />
+          </div>
+          <span>XIIA::BugTracker</span>
+        </div>
+        <h1>Tester Login</h1>
+        <p>Select your project and enter the tester password to continue.</p>
+        <label>
+          Project
+          <select
+            value={projectId}
+            onChange={(e) => {
+              setProjectId(e.target.value);
+              setError(null);
+            }}
+          >
+            <option value="">Select project</option>
+            {Object.entries(PROJECTS).map(([id, p]) => (
+              <option key={id} value={id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Password
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') submit();
+            }}
+            placeholder="Enter tester password"
+          />
+        </label>
+        {error && <div className="form-msg err">{error}</div>}
+        <button type="button" className="primary login-btn" onClick={submit}>
+          <Lock size={16} /> Login
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Root() {
+  const [projectId, setProjectId] = React.useState<ProjectId | null>(() => {
+    const stored = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(AUTH_STORAGE_KEY) : null;
+    return isProjectId(stored) ? stored : null;
+  });
+
+  const handleLogin = React.useCallback((id: ProjectId) => {
+    sessionStorage.setItem(AUTH_STORAGE_KEY, id);
+    setProjectId(id);
+  }, []);
+
+  const handleLogout = React.useCallback(() => {
+    sessionStorage.removeItem(AUTH_STORAGE_KEY);
+    setProjectId(null);
+  }, []);
+
+  if (!projectId) return <LoginScreen onLogin={handleLogin} />;
+  return <Dashboard projectId={projectId} onLogout={handleLogout} />;
+}
+
+createRoot(document.getElementById('root')!).render(<Root />);
