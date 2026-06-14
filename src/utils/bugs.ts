@@ -2,6 +2,8 @@ import type { IssueRow, BugStatus, Severity } from '../types/bug';
 
 export function deriveStatus(issue: IssueRow): BugStatus {
   if (issue.state === 'closed') return 'Closed';
+  // A bug with an open PR is actively being worked on.
+  if (issue.hasOpenPr) return 'In Progress';
   const labels = issue.labels.map((l) => l.toLowerCase());
   if (labels.some((l) => l.includes('in progress'))) return 'In Progress';
   return 'Open';

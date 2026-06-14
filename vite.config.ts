@@ -284,25 +284,129 @@ async function listViaRest(project: Repo, token: string) {
     }));
 }
 
+// This team names each bug-fix PR after the issue it fixes (e.g. a PR titled
+// "#1282 BUGS: ..." or "1306: BUGS: ..." fixes issue 1282 / 1306). Those title
+// references do NOT create GitHub cross-reference events, so we link open PRs to
+// their bug by parsing the leading number from each open PR's title.
+async function fetchOpenPrMap(project: Repo, token: string) {
+  const map = new Map<number, { number: number; url: string; draft: boolean }>();
+  const res = await fetch(`${GITHUB_API}/repos/${project.repo}/pulls?state=open&per_page=100`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'BugTracker',
+    },
+  });
+  if (!res.ok) return map;
+  const data: any = await res.json().catch(() => []);
+  if (!Array.isArray(data)) return map;
+  for (const pr of data) {
+    const match = /^\s*#?(\d+)\b/.exec(pr.title || '');
+    if (!match) continue;
+    const issueNumber = Number(match[1]);
+    if (!Number.isInteger(issueNumber) || issueNumber === pr.number) continue;
+    const existing = map.get(issueNumber);
+    // If several open PRs reference the same bug, keep the newest one.
+    if (!existing || pr.number > existing.number) {
+      map.set(issueNumber, { number: pr.number, url: pr.html_url, draft: !!pr.draft });
+    }
+  }
+  return map;
+}
+
+// Fetches a single issue by number, used for in-progress bugs whose issue is not
+// in the most-recent page. Returns null if it is missing or actually a PR.
+async function fetchIssueRow(
+  project: Repo,
+  token: string,
+  number: number,
+  pr: { number: number; url: string; draft: boolean },
+) {
+  try {
+    const res = await fetch(`${GITHUB_API}/repos/${project.repo}/issues/${number}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'BugTracker',
+      },
+    });
+    if (!res.ok) return null;
+    const i: any = await res.json().catch(() => null);
+    if (!i || i.pull_request) return null;
+    return {
+      number: i.number,
+      title: i.title,
+      state: i.state,
+      labels: (i.labels || []).map((l: any) => (typeof l === 'string' ? l : l?.name)).filter(Boolean),
+      url: i.html_url,
+      updatedAt: i.updated_at,
+      assignee: i.assignee?.login ?? i.assignees?.[0]?.login ?? null,
+      pr: pr.number,
+      prUrl: pr.url,
+      prDraft: pr.draft,
+      hasOpenPr: true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Links open PRs to their bug, marks those bugs in-progress, and pulls in any
+// referenced bug that was not already in the list.
+async function applyOpenPrs(project: Repo, token: string, issues: any[]) {
+  const prMap = await fetchOpenPrMap(project, token);
+  if (!prMap.size) return issues;
+
+  const byNumber = new Map<number, any>(issues.map((i) => [i.number, i]));
+  for (const [issueNumber, pr] of prMap) {
+    const row = byNumber.get(issueNumber);
+    if (row) {
+      row.pr = pr.number;
+      row.prUrl = pr.url;
+      row.prDraft = pr.draft;
+      row.hasOpenPr = true;
+    }
+  }
+
+  const missing = [...prMap.keys()].filter((n) => !byNumber.has(n));
+  const fetched = await Promise.all(missing.map((n) => fetchIssueRow(project, token, n, prMap.get(n)!)));
+  const extras = fetched.filter((r): r is NonNullable<typeof r> => r != null);
+
+  const all = [...issues, ...extras];
+  all.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  return all;
+}
+
 // Lists the most recently updated issues (any state) for a project's repo, with
-// linked PR + assignee. Tries GraphQL first, then falls back to REST.
+// linked PR + assignee, then links open PRs (in-progress bug fixes) to their bug.
+// Tries GraphQL first, then falls back to REST.
 async function listBugIssues(projectId: string | null, env: Record<string, string>) {
   const resolved = resolveRepo(projectId, env);
   if ('error' in resolved) return resolved.error;
   const { project, token } = resolved;
 
+  let issues: any[];
   try {
-    const issues = await listViaGraphql(project, token);
-    return { status: 200, body: { repository: project.repo, name: project.name, issues } };
+    issues = await listViaGraphql(project, token);
   } catch {
     try {
-      const issues = await listViaRest(project, token);
-      return { status: 200, body: { repository: project.repo, name: project.name, issues } };
+      issues = await listViaRest(project, token);
     } catch (restErr) {
       const message = restErr instanceof Error ? restErr.message : 'Could not reach GitHub. Check your network connection.';
       return { status: 502, body: { error: message } };
     }
   }
+
+  // Non-fatal: if the PR lookup fails, still return the issues without linkage.
+  try {
+    issues = await applyOpenPrs(project, token, issues);
+  } catch {
+    /* keep unannotated issues */
+  }
+
+  return { status: 200, body: { repository: project.repo, name: project.name, issues } };
 }
 
 // Closes a mistakenly-created ticket (item 7) or reopens one (item 8), tagging

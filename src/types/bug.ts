@@ -14,6 +14,8 @@ export type IssueRow = {
   assignee: string | null;
   pr: number | null;
   prUrl?: string;
+  prDraft?: boolean;
+  hasOpenPr?: boolean;
 };
 
 export const STATUS_TABS: BugStatus[] = ['Open', 'In Progress', 'Closed'];

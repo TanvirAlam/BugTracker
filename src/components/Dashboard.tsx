@@ -456,6 +456,7 @@ export function Dashboard({
                           {b.pr ? (
                             <a href={b.prUrl} target="_blank" rel="noreferrer">
                               #{b.pr}
+                              {b.prDraft ? <span className="muted"> draft</span> : null}
                             </a>
                           ) : (
                             <span className="muted">—</span>
