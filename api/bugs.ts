@@ -7,7 +7,7 @@ function setCorsHeaders(res: any) {
 }
 
 export const config = {
-  runtime: 'nodejs20',
+  runtime: 'nodejs',
 };
 
 export default async function handler(req: any, res: any) {
