@@ -303,7 +303,7 @@ export function Dashboard({
             </label>
           </div>
 
-          <label>
+          {/* <label>
             Attachments
             <input
               ref={fileInputRef}
@@ -347,7 +347,7 @@ export function Dashboard({
                 <small>Screenshots, logs, images (Max 10MB)</small>
               </div>
             )}
-          </label>
+          </label> */}
 
           <div className="submit-row">
             <button type="button" className="primary" onClick={createBug} disabled={submitting}>
@@ -464,10 +464,17 @@ export function Dashboard({
                         </td>
                         <td data-label="PR">
                           {b.pr ? (
-                            <a href={b.prUrl} target="_blank" rel="noreferrer">
-                              #{b.pr}
-                              {b.prDraft ? <span className="muted"> draft</span> : null}
-                            </a>
+                            b.prUrl ? (
+                              <a href={b.prUrl} target="_blank" rel="noreferrer">
+                                #{b.pr}
+                                {b.prDraft ? <span className="muted"> draft</span> : null}
+                              </a>
+                            ) : (
+                              <span>
+                                #{b.pr}
+                                {b.prDraft ? <span className="muted"> draft</span> : null}
+                              </span>
+                            )
                           ) : (
                             <span className="muted">—</span>
                           )}
@@ -518,8 +525,24 @@ export function Dashboard({
         </section>
 
         {confirmAction && confirmNumber !== null && (
-          <div className="modal-overlay">
-            <div className="modal">
+          <div
+            className="modal-overlay"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setConfirmAction(null);
+                setConfirmNumber(null);
+                setConfirmReason('');
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setConfirmAction(null);
+                setConfirmNumber(null);
+                setConfirmReason('');
+              }
+            }}
+          >
+            <div className="modal" role="dialog" aria-modal="true" tabIndex={-1}>
               <h3>{confirmAction === 'reopen' ? 'Reopen Issue' : 'Close Issue'}</h3>
               <p>
                 {confirmAction === 'reopen'
@@ -527,11 +550,15 @@ export function Dashboard({
                   : 'Are you sure this was closed by mistake?'}
               </p>
               <label>
-                Reason {confirmAction === 'reopen' ? '(required)' : '(required)'}
+                Reason *
                 <textarea
                   value={confirmReason}
                   onChange={(e) => setConfirmReason(e.target.value)}
-                  placeholder={confirmAction === 'reopen' ? 'Why should this be reopened?' : 'Why was this closed by mistake?'}
+                  placeholder={
+                    confirmAction === 'reopen'
+                      ? 'Why should this be reopened?'
+                      : 'Why was this closed by mistake?'
+                  }
                   rows={3}
                 />
               </label>
