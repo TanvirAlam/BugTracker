@@ -1,7 +1,7 @@
 import React from 'react';
 import { Bug, Lock, RefreshCw } from 'lucide-react';
 import { PROJECTS, type ProjectId } from '../projects';
-import { TESTER_PASSWORD } from '../types/bug';
+import { PROJECT_PASSWORDS } from '../types/bug';
 
 // Simple arithmetic captcha: two small numbers the tester must add up.
 function makeCaptcha() {
@@ -30,8 +30,8 @@ export function LoginScreen({ onLogin }: { onLogin: (projectId: ProjectId, name:
       setError('Please enter your name.');
       return;
     }
-    if (password !== TESTER_PASSWORD) {
-      setError('Incorrect password. Please try again.');
+    if (password !== PROJECT_PASSWORDS[projectId as ProjectId]) {
+      setError('Incorrect password for this project. Please try again.');
       return;
     }
     if (captchaAnswer.trim() === '' || Number(captchaAnswer) !== captcha.a + captcha.b) {

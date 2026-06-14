@@ -2,6 +2,8 @@ import { defineConfig, loadEnv } from 'vite';
 import type { Plugin, ViteDevServer, PreviewServer } from 'vite';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import react from '@vitejs/plugin-react';
+import { appendFile, mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 import { PROJECTS, type ProjectId } from './src/projects';
 
 const GITHUB_API = 'https://api.github.com';
@@ -21,6 +23,9 @@ type BugPayload = {
   platform?: string;
   number?: number;
   action?: string;
+  name?: string;
+  attachmentName?: string;
+  attachmentContent?: string;
 };
 
 type Repo = { name: string; repo: string };
@@ -57,7 +62,7 @@ function readJsonBody(req: IncomingMessage): Promise<BugPayload> {
     let raw = '';
     req.on('data', (chunk) => {
       raw += chunk;
-      if (raw.length > 1_000_000) req.destroy(); // basic guard against huge bodies
+      if (raw.length > 16_000_000) req.destroy(); // basic guard against huge bodies (allows ~10MB attachments)
     });
     req.on('end', () => {
       if (!raw) return resolve({});
@@ -88,6 +93,38 @@ async function createBugIssue(payload: BugPayload, env: Record<string, string>) 
 
   const environment = payload.environment === 'Live' ? 'Live' : 'Stage';
 
+  // Optional image attachment: GitHub's issue API can't store attachments, so we
+  // commit the image to the repo (Contents API) and embed its URL in the body.
+  let attachmentUrl = '';
+  let attachmentWarning = '';
+  let safeName = '';
+  if (payload.attachmentName && payload.attachmentContent) {
+    safeName = payload.attachmentName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80) || 'attachment';
+    const filePath = `bugtracker-attachments/${Date.now()}-${safeName}`;
+    try {
+      const up = await fetch(`${GITHUB_API}/repos/${project.repo}/contents/${filePath}`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          'Content-Type': 'application/json',
+          'User-Agent': 'BugTracker',
+        },
+        body: JSON.stringify({ message: `Add bug attachment ${safeName}`, content: payload.attachmentContent }),
+      });
+      const upData: any = await up.json().catch(() => ({}));
+      if (up.ok && upData?.content) {
+        attachmentUrl = upData.content.download_url || upData.content.html_url || '';
+      } else {
+        const hint = up.status === 403 ? ` Ensure ${envVar} has "Contents: Read and write".` : '';
+        attachmentWarning = (upData?.message || `Attachment upload failed (${up.status}).`) + hint;
+      }
+    } catch {
+      attachmentWarning = 'Attachment upload failed: could not reach GitHub.';
+    }
+  }
+
   const lines: string[] = [`**Environment:** ${environment}`];
   if (payload.tester) lines.push(`**Reported by:** ${payload.tester}`);
   if (payload.severity) lines.push(`**Severity:** ${payload.severity}`);
@@ -98,6 +135,12 @@ async function createBugIssue(payload: BugPayload, env: Record<string, string>) 
   lines.push('', '## Description', (payload.description || '').trim() || '_No description provided._');
   if ((payload.steps || '').trim()) {
     lines.push('', '## Steps to Reproduce', (payload.steps as string).trim());
+  }
+  if (attachmentUrl) {
+    lines.push('', '## Attachment', `![${safeName}](${attachmentUrl})`);
+  }
+  if (attachmentWarning) {
+    lines.push('', `_Attachment note: ${attachmentWarning}_`);
   }
   lines.push('', '---', '_Filed via BugTracker._');
 
@@ -136,7 +179,12 @@ async function createBugIssue(payload: BugPayload, env: Record<string, string>) 
 
   return {
     status: 201,
-    body: { url: data.html_url, number: data.number, repository: project.repo },
+    body: {
+      url: data.html_url,
+      number: data.number,
+      repository: project.repo,
+      attachmentWarning: attachmentWarning || undefined,
+    },
   };
 }
 
@@ -299,6 +347,25 @@ async function updateBugIssue(payload: BugPayload, env: Record<string, string>) 
   }
 }
 
+// Appends a "who logged in and when" entry to logs/logins.log (created on first
+// use). Best-effort: the client calls this after a successful login.
+async function logLogin(payload: BugPayload) {
+  const rawName = (payload.name || '').toString().replace(/[\r\n\t]+/g, ' ').trim();
+  const name = rawName || 'Unknown';
+  const projectId = (payload.project || '').toString();
+  const project = PROJECTS[projectId as ProjectId];
+  const projectLabel = project ? `${project.name} (${projectId})` : projectId || 'unknown';
+  const line = `[${new Date().toISOString()}] ${name} logged in to ${projectLabel}\n`;
+  try {
+    const dir = join(process.cwd(), 'logs');
+    await mkdir(dir, { recursive: true });
+    await appendFile(join(dir, 'logins.log'), line, 'utf8');
+    return { status: 200, body: { ok: true } };
+  } catch (err) {
+    return { status: 500, body: { error: err instanceof Error ? err.message : 'Failed to write login log.' } };
+  }
+}
+
 // Adds the /api/bugs route (GET list + POST create + PATCH update) to both the dev server and
 // the preview server so the app is fully functional with `npm run dev` and
 // `npm run preview`. Tokens are read server-side only and never exposed to the
@@ -307,6 +374,19 @@ function bugApiPlugin(env: Record<string, string>): Plugin {
   const attach = (server: ViteDevServer | PreviewServer) => {
     server.middlewares.use((req: IncomingMessage, res: ServerResponse, next: () => void) => {
       const path = (req.url || '').split('?')[0];
+      if (path === '/api/login') {
+        if (req.method !== 'POST') return next();
+        void (async () => {
+          try {
+            const payload = await readJsonBody(req);
+            const result = await logLogin(payload);
+            sendJson(res, result.status, result.body);
+          } catch (err) {
+            sendJson(res, 500, { error: err instanceof Error ? err.message : 'Unexpected server error.' });
+          }
+        })();
+        return;
+      }
       if (path !== '/api/bugs') return next();
       void (async () => {
         try {

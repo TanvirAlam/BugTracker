@@ -18,6 +18,12 @@ export function Root() {
     sessionStorage.setItem(TESTER_NAME_KEY, name);
     setProjectId(id);
     setTesterName(name);
+    // Best-effort server-side audit log of who logged in and when.
+    void fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project: id, name }),
+    }).catch(() => {});
   }, []);
 
   const handleLogout = React.useCallback(() => {

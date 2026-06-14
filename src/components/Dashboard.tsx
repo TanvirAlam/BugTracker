@@ -35,6 +35,10 @@ export function Dashboard({
   const [query, setQuery] = React.useState('');
   const [actingNumber, setActingNumber] = React.useState<number | null>(null);
   const [actionError, setActionError] = React.useState<string | null>(null);
+  const [attachmentName, setAttachmentName] = React.useState('');
+  const [attachmentPreview, setAttachmentPreview] = React.useState('');
+  const [attachmentContent, setAttachmentContent] = React.useState('');
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const loadBugs = React.useCallback(async (projectId: string) => {
     if (!projectId) {
@@ -96,6 +100,8 @@ export function Dashboard({
           priority,
           device,
           platform,
+          attachmentName: attachmentName || undefined,
+          attachmentContent: attachmentContent || undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -104,12 +110,15 @@ export function Dashboard({
       } else {
         setResult({
           ok: true,
-          message: `Bug filed in ${data.repository} as issue #${data.number}.`,
+          message: `Bug filed in ${data.repository} as issue #${data.number}.${
+            data.attachmentWarning ? ` Attachment note: ${data.attachmentWarning}` : ''
+          }`,
           url: data.url,
         });
         setTitle('');
         setDescription('');
         setSteps('');
+        clearAttachment();
         loadBugs(project);
       }
     } catch (err) {
@@ -142,6 +151,33 @@ export function Dashboard({
     } finally {
       setActingNumber(null);
     }
+  }
+
+  function onPickFile(file: File | undefined) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setResult({ ok: false, message: 'Attachment must be an image.' });
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setResult({ ok: false, message: 'Attachment is too large (max 10MB).' });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      setAttachmentName(file.name);
+      setAttachmentPreview(dataUrl);
+      setAttachmentContent(dataUrl.includes(',') ? dataUrl.split(',')[1] : '');
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearAttachment() {
+    setAttachmentName('');
+    setAttachmentPreview('');
+    setAttachmentContent('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
   const projectInfo = PROJECTS[projectId as keyof typeof PROJECTS];
@@ -259,11 +295,48 @@ export function Dashboard({
 
           <label>
             Attachments
-            <div className="upload">
-              <Upload size={16} /> Drag & drop files or click to upload
-              <br />
-              <small>Screenshots, logs, videos (Max 10MB)</small>
-            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="file-input-hidden"
+              onChange={(e) => onPickFile(e.target.files?.[0])}
+            />
+            {attachmentPreview ? (
+              <div className="upload has-file">
+                <img src={attachmentPreview} alt={attachmentName} className="attach-preview" />
+                <div className="attach-meta">
+                  <span>{attachmentName}</span>
+                  <div className="attach-actions">
+                    <button type="button" onClick={() => fileInputRef.current?.click()}>
+                      Replace
+                    </button>
+                    <button type="button" onClick={clearAttachment}>
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div
+                className="upload"
+                role="button"
+                tabIndex={0}
+                onClick={() => fileInputRef.current?.click()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click();
+                }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  onPickFile(e.dataTransfer.files?.[0]);
+                }}
+              >
+                <Upload size={16} /> Drag & drop files or click to upload
+                <br />
+                <small>Screenshots, logs, images (Max 10MB)</small>
+              </div>
+            )}
           </label>
 
           <div className="submit-row">

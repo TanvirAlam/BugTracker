@@ -2,6 +2,9 @@ node_modules
 dist
 *.local
 
+# Local login audit log
+logs/
+
 # Local env files — never commit your GitHub token
 .env
 .env.*

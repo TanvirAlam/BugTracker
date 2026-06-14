@@ -18,7 +18,14 @@ export type IssueRow = {
 
 export const STATUS_TABS: BugStatus[] = ['Open', 'In Progress', 'Closed'];
 
-export const TESTER_PASSWORD = 'XIIA.Tester.2026$';
+// Per-project tester passwords (client-side gate, consistent with the simple
+// login this app already uses).
+export const PROJECT_PASSWORDS: Record<ProjectId, string> = {
+  foodime: 'XIIA.foodime.2026$',
+  soundmade: 'XIIA.soundmade.2026$',
+  wewaive: 'XIIA.wewaive.2026$',
+  kiibee: 'XIIA.kiibee.2026$',
+};
 export const AUTH_STORAGE_KEY = 'bugtracker.tester.project';
 export const TESTER_NAME_KEY = 'bugtracker.tester.name';
 
