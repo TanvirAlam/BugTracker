@@ -58,7 +58,7 @@ export function Dashboard({
       const res = await fetch(`/api/bugs?project=${encodeURIComponent(projectId)}`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `Failed to load issues (${res.status}).`);
-      setBugs(Array.isArray(data.issues) ? data.issues : []);
+      setBugs(Array.isArray(data.issues) ? data.issues.sort((a, b) => b.number - a.number) : []);
     } catch (err) {
       setBugs([]);
       setBugsError(err instanceof Error ? err.message : 'Failed to load issues.');
