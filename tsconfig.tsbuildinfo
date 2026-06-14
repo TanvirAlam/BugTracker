@@ -1,1 +1,1 @@
-{"root":["./src/main.tsx","./src/projects.ts","./src/vite-env.d.ts","./src/components/dashboard.tsx","./src/components/loginscreen.tsx","./src/components/root.tsx","./src/types/bug.ts","./src/utils/bugs.ts"],"version":"5.9.3"}
+{"root":["./src/main.tsx","./src/projects.ts","./src/vite-env.d.ts","./src/components/dashboard.tsx","./src/components/loginscreen.tsx","./src/components/root.tsx","./src/server/api.ts","./src/types/bug.ts","./src/utils/bugs.ts","./api/bugs.ts"],"version":"5.9.3"}

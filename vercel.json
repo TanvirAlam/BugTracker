@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "api/bugs.ts", "use": "@vercel/node" },
+    { "src": "dist/index.html", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/api/bugs", "dest": "/api/bugs.ts" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
+}
