@@ -603,6 +603,117 @@ td small {
   flex: none;
 }
 
+/* Login captcha */
+.captcha-row {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid #d8dee9;
+  border-radius: 8px;
+  padding: 10px 13px;
+  background: #f8fafc;
+}
+
+.captcha-q {
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: 1px;
+  color: #0f172a;
+  user-select: none;
+}
+
+.captcha-refresh {
+  border: 0;
+  background: transparent;
+  color: #1167e8;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px;
+  border-radius: 6px;
+}
+
+.captcha-refresh:hover {
+  background: #eaf2ff;
+}
+
+/* My Bugs search box */
+.bugs-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #d8dee9;
+  border-radius: 9px;
+  padding: 0 12px;
+  height: 38px;
+  min-width: 240px;
+  background: #fff;
+  color: #64748b;
+}
+
+.bugs-search input {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+/* Per-row actions in the bugs table */
+.row-btn {
+  border: 1px solid #d8dee9;
+  background: #fff;
+  border-radius: 7px;
+  padding: 6px 10px;
+  margin-right: 8px;
+  font-weight: 700;
+  font-size: 12px;
+  color: #334155;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.row-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.row-btn.danger {
+  color: #b91c1c;
+  border-color: #fecaca;
+  background: #fff5f5;
+}
+
+.row-btn.danger:hover {
+  background: #fee2e2;
+}
+
+.row-btn.reopen {
+  color: #1167e8;
+  border-color: #bfdbfe;
+  background: #f5f9ff;
+}
+
+.row-btn.reopen:hover {
+  background: #dbeafe;
+}
+
+.row-actions a {
+  vertical-align: middle;
+}
+
+.bugs-msg {
+  margin: 0 24px 12px;
+}
+
 /* ===== Tablet / small laptop ===== */
 @media (max-width: 1050px) {
   .topbar {
@@ -777,11 +888,14 @@ td small {
   }
 
   .row-actions {
-    position: absolute;
-    top: 12px;
-    right: 8px;
-    padding: 0;
+    position: static;
+    top: auto;
+    right: auto;
+    padding: 8px 0 0;
     color: #64748b;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
   .row-actions::before {
