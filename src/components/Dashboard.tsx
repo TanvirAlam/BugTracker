@@ -33,6 +33,8 @@ export function Dashboard({
   const [bugsError, setBugsError] = React.useState<string | null>(null);
   const [activeTab, setActiveTab] = React.useState<BugStatus>(STATUS_TABS[0]);
   const [query, setQuery] = React.useState('');
+  const [page, setPage] = React.useState(1);
+  const pageSize = 5;
   const [actingNumber, setActingNumber] = React.useState<number | null>(null);
   const [actionError, setActionError] = React.useState<string | null>(null);
   const [attachmentName, setAttachmentName] = React.useState('');
@@ -64,6 +66,10 @@ export function Dashboard({
       setBugsLoading(false);
     }
   }, []);
+
+  React.useEffect(() => {
+    setPage(1);
+  }, [query, activeTab]);
 
   React.useEffect(() => {
     loadBugs(project);
@@ -390,43 +396,150 @@ export function Dashboard({
             })}
           </div>
           {actionError && <div className="form-msg err bugs-msg">{actionError}</div>}
-          <table>
-            <thead>
-              <tr>
-                <th>Bug ID</th>
-                <th>Title</th>
-                <th>Assignee</th>
-                <th>PR</th>
-                <th>Severity</th>
-                <th>Status</th>
-                <th>Updated</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {!projectId ? (
+          <div className="bugs-table-wrap">
+            <table>
+              <thead>
                 <tr>
-                  <td className="bugs-note" colSpan={8}>
-                    Select a project to view its issues.
-                  </td>
+                  <th>Bug ID</th>
+                  <th>Title</th>
+                  <th>Assignee</th>
+                  <th>PR</th>
+                  <th>Severity</th>
+                  <th>Status</th>
+                  <th>Updated</th>
+                  <th></th>
                 </tr>
-              ) : bugsLoading ? (
-                <tr>
-                  <td className="bugs-note" colSpan={8}>
-                    Loading issues…
-                  </td>
-                </tr>
-              ) : bugsError ? (
-                <tr>
-                  <td className="bugs-note err" colSpan={8}>
-                    {bugsError}
-                  </td>
-                </tr>
-              ) : (
-                (() => {
+              </thead>
+              <tbody>
+                {!projectId ? (
+                  <tr>
+                    <td className="bugs-note" colSpan={8}>
+                      Select a project to view its issues.
+                    </td>
+                  </tr>
+                ) : bugsLoading ? (
+                  <tr>
+                    <td className="bugs-note" colSpan={8}>
+                      Loading issues…
+                    </td>
+                  </tr>
+                ) : bugsError ? (
+                  <tr>
+                    <td className="bugs-note err" colSpan={8}>
+                      {bugsError}
+                    </td>
+                  </tr>
+                ) : (
+                  (() => {
+                    const q = query.trim().toLowerCase();
+                    const byTab = bugs.filter((b) => deriveStatus(b) === activeTab);
+                    const filtered = q
+                      ? byTab.filter(
+                          (b) =>
+                            b.title.toLowerCase().includes(q) ||
+                            String(b.number).includes(q) ||
+                            (b.assignee ? b.assignee.toLowerCase().includes(q) : false),
+                        )
+                      : byTab;
+                    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+                    const safePage = Math.min(page, totalPages);
+                    const pageRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+                    if (filtered.length === 0) {
+                      return (
+                        <tr>
+                          <td className="bugs-note" colSpan={8}>
+                            No issues found.
+                          </td>
+                        </tr>
+                      );
+                    }
+                    return pageRows.map((b) => {
+                      const status = deriveStatus(b);
+                      const sev = deriveSeverity(b);
+                      const busy = actingNumber === b.number;
+                      return (
+                        <tr key={b.number}>
+                          <td className="bug-id" data-label="Bug ID">
+                            #{b.number}
+                          </td>
+                          <td className="bug-title" data-label="Title">
+                            <strong>
+                              <a href={b.url} target="_blank" rel="noreferrer">
+                                {b.title}
+                              </a>
+                            </strong>
+                          </td>
+                          <td data-label="Assignee">
+                            {b.assignee ? b.assignee : <span className="muted">—</span>}
+                          </td>
+                          <td data-label="PR">
+                            {b.pr ? (
+                              b.prUrl ? (
+                                <a href={b.prUrl} target="_blank" rel="noreferrer">
+                                  #{b.pr}
+                                  {b.prDraft ? <span className="muted"> draft</span> : null}
+                                </a>
+                              ) : (
+                                <span>
+                                  #{b.pr}
+                                  {b.prDraft ? <span className="muted"> draft</span> : null}
+                                </span>
+                              )
+                            ) : (
+                              <span className="muted">—</span>
+                            )}
+                          </td>
+                          <td data-label="Severity">
+                            {sev ? <span className={`pill ${sev.toLowerCase()}`}>{sev}</span> : <span className="muted">—</span>}
+                          </td>
+                          <td data-label="Status">
+                            <span className="status">{status}</span>
+                          </td>
+                          <td data-label="Updated">{timeAgo(b.updatedAt)}</td>
+                          <td className="row-actions">
+                            {status === 'Closed' ? (
+                              <button
+                                type="button"
+                                className="row-btn reopen"
+                                disabled={busy || !!b.assignee || b.pr !== null}
+                                onClick={() => {
+                                  setConfirmAction('reopen');
+                                  setConfirmNumber(b.number);
+                                  setConfirmReason('');
+                                }}
+                              >
+                                <RotateCcw size={14} /> {busy ? '…' : 'Reopen'}
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                className="row-btn danger"
+                                disabled={busy || !!b.assignee || b.pr !== null}
+                                onClick={() => {
+                                  setConfirmAction('close-mistake');
+                                  setConfirmNumber(b.number);
+                                  setConfirmReason('');
+                                }}
+                              >
+                                <Ban size={14} /> {busy ? '…' : 'Close (mistake)'}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    });
+                  })()
+                )}
+              </tbody>
+            </table>
+          </div>
+          {!bugsLoading && !bugsError && bugs.length > 0 && (
+            <div className="pagination">
+              <span>
+                {(() => {
                   const q = query.trim().toLowerCase();
                   const byTab = bugs.filter((b) => deriveStatus(b) === activeTab);
-                  const rows = q
+                  const filtered = q
                     ? byTab.filter(
                         (b) =>
                           b.title.toLowerCase().includes(q) ||
@@ -434,94 +547,82 @@ export function Dashboard({
                           (b.assignee ? b.assignee.toLowerCase().includes(q) : false),
                       )
                     : byTab;
-                  if (rows.length === 0) {
-                    return (
-                      <tr>
-                        <td className="bugs-note" colSpan={8}>
-                          No issues found.
-                        </td>
-                      </tr>
-                    );
-                  }
-                  return rows.map((b) => {
-                    const status = deriveStatus(b);
-                    const sev = deriveSeverity(b);
-                    const busy = actingNumber === b.number;
-                    return (
-                      <tr key={b.number}>
-                        <td className="bug-id" data-label="Bug ID">
-                          #{b.number}
-                        </td>
-                        <td className="bug-title" data-label="Title">
-                          <strong>
-                            <a href={b.url} target="_blank" rel="noreferrer">
-                              {b.title}
-                            </a>
-                          </strong>
-                        </td>
-                        <td data-label="Assignee">
-                          {b.assignee ? b.assignee : <span className="muted">—</span>}
-                        </td>
-                        <td data-label="PR">
-                          {b.pr ? (
-                            b.prUrl ? (
-                              <a href={b.prUrl} target="_blank" rel="noreferrer">
-                                #{b.pr}
-                                {b.prDraft ? <span className="muted"> draft</span> : null}
-                              </a>
-                            ) : (
-                              <span>
-                                #{b.pr}
-                                {b.prDraft ? <span className="muted"> draft</span> : null}
-                              </span>
-                            )
-                          ) : (
-                            <span className="muted">—</span>
-                          )}
-                        </td>
-                        <td data-label="Severity">
-                          {sev ? <span className={`pill ${sev.toLowerCase()}`}>{sev}</span> : <span className="muted">—</span>}
-                        </td>
-                        <td data-label="Status">
-                          <span className="status">{status}</span>
-                        </td>
-                        <td data-label="Updated">{timeAgo(b.updatedAt)}</td>
-                        <td className="row-actions">
-                          {status === 'Closed' ? (
-                            <button
-                              type="button"
-                              className="row-btn reopen"
-                              disabled={busy || !!b.assignee || b.pr !== null}
-                              onClick={() => {
-                                setConfirmAction('reopen');
-                                setConfirmNumber(b.number);
-                                setConfirmReason('');
-                              }}
-                            >
-                              <RotateCcw size={14} /> {busy ? '…' : 'Reopen'}
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className="row-btn danger"
-                              disabled={busy || !!b.assignee || b.pr !== null}
-                              onClick={() => {
-                                setConfirmAction('close-mistake');
-                                setConfirmNumber(b.number);
-                                setConfirmReason('');
-                              }}
-                            >
-                              <Ban size={14} /> {busy ? '…' : 'Close (mistake)'}
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    );
+                  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+                  const safePage = Math.min(page, totalPages);
+                  const start = filtered.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+                  const end = Math.min(safePage * pageSize, filtered.length);
+                  return `Showing ${start}-${end} of ${filtered.length}`;
+                })()}
+              </span>
+              <div className="pagination-btns">
+                <button
+                  type="button"
+                  className="page-btn"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Prev
+                </button>
+                {(() => {
+                  const q = query.trim().toLowerCase();
+                  const byTab = bugs.filter((b) => deriveStatus(b) === activeTab);
+                  const filtered = q
+                    ? byTab.filter(
+                        (b) =>
+                          b.title.toLowerCase().includes(q) ||
+                          String(b.number).includes(q) ||
+                          (b.assignee ? b.assignee.toLowerCase().includes(q) : false),
+                      )
+                    : byTab;
+                  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+                  const safePage = Math.min(page, totalPages);
+                  const pages = Array.from({ length: totalPages }, (_, i) => i + 1).filter((p) => {
+                    if (totalPages <= 5) return true;
+                    return p === 1 || p === totalPages || Math.abs(p - safePage) <= 1;
                   });
-                })()
-              )}
-            </tbody>
-          </table>
+                  if (pages[0] !== 1) {
+                    pages.unshift(1);
+                    if (pages[1] !== 2) pages.splice(1, 0, '…');
+                  }
+                  if (pages[pages.length - 1] !== totalPages) {
+                    pages.push(totalPages);
+                    if (pages[pages.length - 2] !== totalPages - 1) pages.splice(pages.length - 1, 0, '…');
+                  }
+                  return pages.map((p, idx) => (
+                    <button
+                      key={`${p}-${idx}`}
+                      type="button"
+                      className={`page-btn ${p === safePage ? 'active' : ''}`}
+                      disabled={p === '…'}
+                      onClick={() => typeof p === 'number' && setPage(p)}
+                    >
+                      {p}
+                    </button>
+                  ));
+                })()}
+                <button
+                  type="button"
+                  className="page-btn"
+                  disabled={(() => {
+                    const q = query.trim().toLowerCase();
+                    const byTab = bugs.filter((b) => deriveStatus(b) === activeTab);
+                    const filtered = q
+                      ? byTab.filter(
+                          (b) =>
+                            b.title.toLowerCase().includes(q) ||
+                            String(b.number).includes(q) ||
+                            (b.assignee ? b.assignee.toLowerCase().includes(q) : false),
+                        )
+                      : byTab;
+                    return page >= Math.max(1, Math.ceil(filtered.length / pageSize));
+                  })()}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </section>
 
         {confirmAction && confirmNumber !== null && (

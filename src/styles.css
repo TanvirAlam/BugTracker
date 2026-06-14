@@ -382,12 +382,59 @@ textarea {
   border-bottom: 2px solid #1167e8;
 }
 
-table {
+.bugs-table-wrap {
   width: calc(100% - 24px);
   margin: 12px;
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
   border-collapse: collapse;
   overflow: hidden;
   border-radius: 8px;
+}
+
+.bugs-table-wrap table {
+  min-width: 900px;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.pagination-btns {
+  display: flex;
+  gap: 6px;
+}
+
+.page-btn {
+  min-width: 34px;
+  height: 34px;
+  border: 1px solid #d8dee9;
+  background: #fff;
+  border-radius: 8px;
+  padding: 0 8px;
+  font-weight: 700;
+  font-size: 13px;
+  color: #334155;
+  cursor: pointer;
+}
+
+.page-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.page-btn.active {
+  background: #1167e8;
+  color: white;
+  border-color: #1167e8;
 }
 
 th,
