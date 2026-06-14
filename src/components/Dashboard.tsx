@@ -31,7 +31,7 @@ export function Dashboard({
   const [bugs, setBugs] = React.useState<IssueRow[]>([]);
   const [bugsLoading, setBugsLoading] = React.useState(false);
   const [bugsError, setBugsError] = React.useState<string | null>(null);
-  const [activeTab, setActiveTab] = React.useState<'All' | BugStatus>('All');
+  const [activeTab, setActiveTab] = React.useState<BugStatus>(STATUS_TABS[0]);
   const [query, setQuery] = React.useState('');
   const [actingNumber, setActingNumber] = React.useState<number | null>(null);
   const [actionError, setActionError] = React.useState<string | null>(null);
@@ -39,6 +39,9 @@ export function Dashboard({
   const [attachmentPreview, setAttachmentPreview] = React.useState('');
   const [attachmentContent, setAttachmentContent] = React.useState('');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [confirmAction, setConfirmAction] = React.useState<'close-mistake' | 'reopen' | null>(null);
+  const [confirmNumber, setConfirmNumber] = React.useState<number | null>(null);
+  const [confirmReason, setConfirmReason] = React.useState('');
 
   const loadBugs = React.useCallback(async (projectId: string) => {
     if (!projectId) {
@@ -131,14 +134,18 @@ export function Dashboard({
     }
   }
 
-  async function updateBug(number: number, action: 'close-mistake' | 'reopen') {
+  async function updateBug(number: number, action: 'close-mistake' | 'reopen', reason?: string) {
+    const payload: Record<string, unknown> = { project, number, action };
+    if (reason && reason.trim()) {
+      payload.reason = reason.trim();
+    }
     setActionError(null);
     setActingNumber(number);
     try {
       const res = await fetch('/api/bugs', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project, number, action }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -150,6 +157,9 @@ export function Dashboard({
       setActionError(err instanceof Error ? err.message : 'Network error \u2014 is the server running?');
     } finally {
       setActingNumber(null);
+      setConfirmAction(null);
+      setConfirmNumber(null);
+      setConfirmReason('');
     }
   }
 
@@ -370,8 +380,8 @@ export function Dashboard({
             </div>
           </div>
           <div className="tabs">
-            {(['All', ...STATUS_TABS] as const).map((tab) => {
-              const count = tab === 'All' ? bugs.length : bugs.filter((b) => deriveStatus(b) === tab).length;
+            {STATUS_TABS.map((tab) => {
+              const count = bugs.filter((b) => deriveStatus(b) === tab).length;
               return (
                 <span key={tab} className={activeTab === tab ? 'selected' : ''} onClick={() => setActiveTab(tab)}>
                   {tab} <b>{count}</b>
@@ -415,7 +425,7 @@ export function Dashboard({
               ) : (
                 (() => {
                   const q = query.trim().toLowerCase();
-                  const byTab = activeTab === 'All' ? bugs : bugs.filter((b) => deriveStatus(b) === activeTab);
+                  const byTab = bugs.filter((b) => deriveStatus(b) === activeTab);
                   const rows = q
                     ? byTab.filter(
                         (b) =>
@@ -474,8 +484,12 @@ export function Dashboard({
                             <button
                               type="button"
                               className="row-btn reopen"
-                              disabled={busy}
-                              onClick={() => updateBug(b.number, 'reopen')}
+                              disabled={busy || !!b.assignee || b.pr !== null}
+                              onClick={() => {
+                                setConfirmAction('reopen');
+                                setConfirmNumber(b.number);
+                                setConfirmReason('');
+                              }}
                             >
                               <RotateCcw size={14} /> {busy ? '…' : 'Reopen'}
                             </button>
@@ -483,8 +497,12 @@ export function Dashboard({
                             <button
                               type="button"
                               className="row-btn danger"
-                              disabled={busy}
-                              onClick={() => updateBug(b.number, 'close-mistake')}
+                              disabled={busy || !!b.assignee || b.pr !== null}
+                              onClick={() => {
+                                setConfirmAction('close-mistake');
+                                setConfirmNumber(b.number);
+                                setConfirmReason('');
+                              }}
                             >
                               <Ban size={14} /> {busy ? '…' : 'Close (mistake)'}
                             </button>
@@ -498,6 +516,49 @@ export function Dashboard({
             </tbody>
           </table>
         </section>
+
+        {confirmAction && confirmNumber !== null && (
+          <div className="modal-overlay">
+            <div className="modal">
+              <h3>{confirmAction === 'reopen' ? 'Reopen Issue' : 'Close Issue'}</h3>
+              <p>
+                {confirmAction === 'reopen'
+                  ? 'Are you sure you want to reopen this issue?'
+                  : 'Are you sure this was closed by mistake?'}
+              </p>
+              <label>
+                Reason {confirmAction === 'reopen' ? '(required)' : '(required)'}
+                <textarea
+                  value={confirmReason}
+                  onChange={(e) => setConfirmReason(e.target.value)}
+                  placeholder={confirmAction === 'reopen' ? 'Why should this be reopened?' : 'Why was this closed by mistake?'}
+                  rows={3}
+                />
+              </label>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="primary"
+                  disabled={!confirmReason.trim() || actingNumber === confirmNumber}
+                  onClick={() => updateBug(confirmNumber, confirmAction, confirmReason)}
+                >
+                  {actingNumber === confirmNumber ? '…' : 'Confirm'}
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    setConfirmAction(null);
+                    setConfirmNumber(null);
+                    setConfirmReason('');
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

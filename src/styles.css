@@ -411,9 +411,12 @@ td small {
 
 .pill,
 .status {
-  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 60px;
   padding: 5px 10px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .high {
