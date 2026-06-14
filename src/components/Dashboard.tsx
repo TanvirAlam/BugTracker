@@ -58,7 +58,7 @@ export function Dashboard({
       const res = await fetch(`/api/bugs?project=${encodeURIComponent(projectId)}`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `Failed to load issues (${res.status}).`);
-      setBugs(Array.isArray(data.issues) ? data.issues.sort((a, b) => b.number - a.number) : []);
+      setBugs(Array.isArray(data.issues) ? data.issues.sort((a: IssueRow, b: IssueRow) => b.number - a.number) : []);
     } catch (err) {
       setBugs([]);
       setBugsError(err instanceof Error ? err.message : 'Failed to load issues.');
@@ -576,10 +576,10 @@ export function Dashboard({
                     : byTab;
                   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
                   const safePage = Math.min(page, totalPages);
-                  const pages = Array.from({ length: totalPages }, (_, i) => i + 1).filter((p) => {
+                  const pages: Array<number | '…'> = Array.from({ length: totalPages }, (_, i) => i + 1).filter((p) => {
                     if (totalPages <= 5) return true;
                     return p === 1 || p === totalPages || Math.abs(p - safePage) <= 1;
-                  });
+                  }) as Array<number | '…'>;
                   if (pages[0] !== 1) {
                     pages.unshift(1);
                     if (pages[1] !== 2) pages.splice(1, 0, '…');
