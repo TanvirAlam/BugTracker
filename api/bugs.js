@@ -31,12 +31,30 @@ function readJsonBody(req) {
 function resolveRepo(projectId, env) {
   const id = projectId || '';
   const project = PROJECTS[id];
-  if (!project) return { error: { status: 400, body: { error: 'Please select a valid project / repository.' } };
+
+  if (!project) {
+    return {
+      error: {
+        status: 400,
+        body: { error: 'Please select a valid project / repository.' },
+      },
+    };
+  }
+
   const envVar = `${id.toUpperCase()}_TOKEN`;
   const token = env[envVar];
+
   if (!token) {
-    return { error: { status: 500, body: { error: `Server is missing ${envVar}. Add it to .env (or your environment) and restart.` } };
+    return {
+      error: {
+        status: 500,
+        body: {
+          error: `Server is missing ${envVar}. Add it to .env or Vercel Environment Variables and redeploy.`,
+        },
+      },
+    };
   }
+
   return { project, token, envVar };
 }
 
