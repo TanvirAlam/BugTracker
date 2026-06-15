@@ -486,6 +486,22 @@ td small {
   color: #1167e8;
 }
 
+.sprint {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 60px;
+  padding: 5px 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: #ede9fe;
+  color: #6d28d9;
+  text-decoration: none;
+}
+
+a.sprint:hover {
+  text-decoration: underline;
+}
+
 .tabs span {
   cursor: pointer;
 }

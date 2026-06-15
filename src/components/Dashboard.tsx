@@ -1,6 +1,6 @@
 import React from 'react';
 import { Bug, LogOut, Upload, Lock, Search, RotateCcw, Ban } from 'lucide-react';
-import { deriveStatus, deriveSeverity, timeAgo } from '../utils/bugs';
+import { deriveStatus, deriveSeverity, sprintLabel, timeAgo } from '../utils/bugs';
 import { PROJECTS } from '../projects';
 import { STATUS_TABS, type BugStatus, type IssueRow } from '../types/bug';
 import type { ProjectId } from '../projects';
@@ -405,6 +405,7 @@ export function Dashboard({
                   <th>Assignee</th>
                   <th>PR</th>
                   <th>Severity</th>
+                  <th>Sprint</th>
                   <th>Status</th>
                   <th>Updated</th>
                   <th></th>
@@ -413,19 +414,19 @@ export function Dashboard({
               <tbody>
                 {!projectId ? (
                   <tr>
-                    <td className="bugs-note" colSpan={8}>
+                    <td className="bugs-note" colSpan={9}>
                       Select a project to view its issues.
                     </td>
                   </tr>
                 ) : bugsLoading ? (
                   <tr>
-                    <td className="bugs-note" colSpan={8}>
+                    <td className="bugs-note" colSpan={9}>
                       Loading issues…
                     </td>
                   </tr>
                 ) : bugsError ? (
                   <tr>
-                    <td className="bugs-note err" colSpan={8}>
+                    <td className="bugs-note err" colSpan={9}>
                       {bugsError}
                     </td>
                   </tr>
@@ -447,7 +448,7 @@ export function Dashboard({
                     if (filtered.length === 0) {
                       return (
                         <tr>
-                          <td className="bugs-note" colSpan={8}>
+                          <td className="bugs-note" colSpan={9}>
                             No issues found.
                           </td>
                         </tr>
@@ -491,6 +492,27 @@ export function Dashboard({
                           </td>
                           <td data-label="Severity">
                             {sev ? <span className={`pill ${sev.toLowerCase()}`}>{sev}</span> : <span className="muted">—</span>}
+                          </td>
+                          <td data-label="Sprint">
+                            {b.milestone ? (
+                              b.milestone.url ? (
+                                <a
+                                  href={b.milestone.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="sprint"
+                                  title={b.milestone.title}
+                                >
+                                  {sprintLabel(b.milestone.title)}
+                                </a>
+                              ) : (
+                                <span className="sprint" title={b.milestone.title}>
+                                  {sprintLabel(b.milestone.title)}
+                                </span>
+                              )
+                            ) : (
+                              <span className="muted">—</span>
+                            )}
                           </td>
                           <td data-label="Status">
                             <span className="status">{status}</span>

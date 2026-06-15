@@ -63,7 +63,7 @@ async function listViaGraphql(project, token) {
   const query = `query($owner: String!, $name: String!, $count: Int!) {
     repository(owner: $owner, name: $name) {
       issues(first: $count, orderBy: { field: UPDATED_AT, direction: DESC }) {
-        nodes { number title state url updatedAt labels(first: 20) { nodes { name } } assignees(first: 5) { nodes { login } } timelineItems(last: 10, itemTypes: [CROSS_REFERENCED_EVENT]) { nodes { ... on CrossReferencedEvent { source { ... on PullRequest { number url } } } } } }
+        nodes { number title state url updatedAt milestone { title url } labels(first: 20) { nodes { name } } assignees(first: 5) { nodes { login } } timelineItems(last: 10, itemTypes: [CROSS_REFERENCED_EVENT]) { nodes { ... on CrossReferencedEvent { source { ... on PullRequest { number url } } } } } }
       }
     }
   }`;
@@ -77,7 +77,7 @@ async function listViaGraphql(project, token) {
   return (json.data.repository.issues?.nodes || []).map((n) => {
     const prs = (n.timelineItems?.nodes || []).map((t) => t?.source).filter((s) => s && typeof s.number === 'number');
     const pr = prs.length ? prs[prs.length - 1] : null;
-    return { number: n.number, title: n.title, state: String(n.state || '').toLowerCase(), labels: (n.labels?.nodes || []).map((l) => l?.name).filter(Boolean), url: n.url, updatedAt: n.updatedAt, assignee: n.assignees?.nodes?.[0]?.login ?? null, pr: pr ? pr.number : null, prUrl: pr ? pr.url : undefined };
+    return { number: n.number, title: n.title, state: String(n.state || '').toLowerCase(), labels: (n.labels?.nodes || []).map((l) => l?.name).filter(Boolean), url: n.url, updatedAt: n.updatedAt, assignee: n.assignees?.nodes?.[0]?.login ?? null, pr: pr ? pr.number : null, prUrl: pr ? pr.url : undefined, milestone: n.milestone ? { title: n.milestone.title, url: n.milestone.url } : null };
   });
 }
 
@@ -87,7 +87,7 @@ async function listViaRest(project, token) {
   });
   const data = await res.json().catch(() => []);
   if (!res.ok) throw new Error(`GitHub API error (${project.repo})`);
-  return (Array.isArray(data) ? data : []).filter((i) => !i.pull_request).map((i) => ({ number: i.number, title: i.title, state: i.state, labels: (i.labels || []).map((l) => (typeof l === 'string' ? l : l?.name)).filter(Boolean), url: i.html_url, updatedAt: i.updated_at, assignee: i.assignee?.login ?? i.assignees?.[0]?.login ?? null, pr: null, prUrl: undefined }));
+  return (Array.isArray(data) ? data : []).filter((i) => !i.pull_request).map((i) => ({ number: i.number, title: i.title, state: i.state, labels: (i.labels || []).map((l) => (typeof l === 'string' ? l : l?.name)).filter(Boolean), url: i.html_url, updatedAt: i.updated_at, assignee: i.assignee?.login ?? i.assignees?.[0]?.login ?? null, pr: null, prUrl: undefined, milestone: i.milestone ? { title: i.milestone.title, url: i.milestone.html_url } : null }));
 }
 
 async function listBugIssues(projectId, env) {

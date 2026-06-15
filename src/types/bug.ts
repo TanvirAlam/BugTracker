@@ -16,6 +16,7 @@ export type IssueRow = {
   prUrl?: string;
   prDraft?: boolean;
   hasOpenPr?: boolean;
+  milestone?: { title: string; url?: string } | null;
 };
 
 export const STATUS_TABS: BugStatus[] = ['Open', 'In Progress', 'Closed'];

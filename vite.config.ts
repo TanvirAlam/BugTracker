@@ -192,6 +192,7 @@ query($owner: String!, $name: String!, $count: Int!) {
         state
         url
         updatedAt
+        milestone { title url }
         labels(first: 20) { nodes { name } }
         assignees(first: 5) { nodes { login } }
         timelineItems(last: 10, itemTypes: [CROSS_REFERENCED_EVENT]) {
@@ -239,6 +240,7 @@ async function listViaGraphql(project: Repo, token: string) {
       assignee: n.assignees?.nodes?.[0]?.login ?? null,
       pr: pr ? pr.number : null,
       prUrl: pr ? pr.url : undefined,
+      milestone: n.milestone ? { title: n.milestone.title, url: n.milestone.url } : null,
     };
   });
 }
@@ -269,6 +271,7 @@ async function listViaRest(project: Repo, token: string) {
       assignee: i.assignee?.login ?? i.assignees?.[0]?.login ?? null,
       pr: null as number | null,
       prUrl: undefined as string | undefined,
+      milestone: i.milestone ? { title: i.milestone.title, url: i.milestone.html_url } : null,
     }));
 }
 
@@ -328,6 +331,7 @@ async function fetchIssueRow(
       prUrl: pr.url,
       prDraft: pr.draft,
       hasOpenPr: true,
+      milestone: i.milestone ? { title: i.milestone.title, url: i.milestone.html_url } : null,
     };
   } catch {
     return null;

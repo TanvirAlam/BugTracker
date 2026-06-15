@@ -17,6 +17,15 @@ export function deriveSeverity(issue: IssueRow): Severity | null {
   return null;
 }
 
+// Milestones are typically named like "Sprint 1: Jun 8 - Jun 21, 2026".
+// Show just the leading label (e.g. "Sprint 1") in the table; the full title
+// is available via the tooltip / link.
+export function sprintLabel(title: string): string {
+  const trimmed = title.trim();
+  const colon = trimmed.indexOf(':');
+  return colon > 0 ? trimmed.slice(0, colon).trim() : trimmed;
+}
+
 export function timeAgo(iso: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return '';
