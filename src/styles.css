@@ -938,14 +938,53 @@ a.sprint:hover {
   .topbar {
     padding: 10px 14px;
     gap: 10px;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+  }
+
+  .brand {
+    font-size: 17px;
+    gap: 9px;
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+  }
+
+  .brand span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    flex: none;
+  }
+
+  .logo svg {
+    width: 20px;
+    height: 20px;
   }
 
   .actions {
     gap: 12px;
   }
 
+  .session {
+    margin-left: 0;
+    flex: none;
+    gap: 8px;
+  }
+
   .who {
     display: none;
+  }
+
+  .logout {
+    padding: 10px 13px;
+    flex: none;
   }
 
   .container {
