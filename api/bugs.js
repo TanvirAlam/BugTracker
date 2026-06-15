@@ -153,7 +153,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') { res.statusCode = 204; res.end(); return; }
   try {
     if (req.method === 'GET') {
-      const url = new URL(req.url || 'http://localhost/api/bugs');
+      const url = new URL(req.url || '', 'http://localhost');
       const result = await listBugIssues(url.searchParams.get('project'), process.env);
       res.statusCode = result.status; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(result.body));
     } else if (req.method === 'POST') {
