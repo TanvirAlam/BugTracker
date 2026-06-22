@@ -261,27 +261,43 @@ export function Dashboard({
               Bug Severity *
               <select value={severity} onChange={(e) => setSeverity(e.target.value)}>
                 <option value="">🔴 Select severity</option>
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
+                <option value="Critical">🚨 Critical – App unusable / blocking</option>
+                <option value="High">🔴 High – Major functionality affected</option>
+                <option value="Medium">🟠 Medium – Some impact, workaround exists</option>
+                <option value="Low">🟢 Low – Minor issue or cosmetic</option>
               </select>
             </label>
             <label>
               Bug Type *
               <select value={bugType} onChange={(e) => setBugType(e.target.value)}>
                 <option value="">🟢 Select type</option>
-                <option value="Technical">Technical</option>
-                <option value="UI/UX">UI/UX</option>
-                <option value="Data">Data</option>
-                <option value="Payment">Payment</option>
+                <option value="Technical">🛠️ Technical Bug</option>
+                <option value="UI/UX">🎨 UI/UX Issue</option>
+                <option value="Performance">⚡ Performance Issue</option>
+                <option value="Crash">💥 App Crash</option>
+                <option value="Data">📊 Incorrect Data</option>
+                <option value="Payment">💳 Payment Issue</option>
+                <option value="Authentication">🔐 Login / Authentication</option>
+                <option value="Connectivity">🌐 Network / Connectivity</option>
+                <option value="Notifications">🔔 Notifications</option>
+                <option value="Media">📷 Media / Uploads</option>
+                <option value="Localization">🌍 Translation / Localization</option>
+                <option value="Accessibility">♿ Accessibility</option>
+                <option value="Security">🛡️ Security</option>
+                <option value="FeatureRequest">✨ Feature Request</option>
+                <option value="Enhancement">🚀 Enhancement Suggestion</option>
+                <option value="Content">📝 Content Issue</option>
+                <option value="Compatibility">📱 Device Compatibility</option>
+                <option value="Account">👤 Account Issue</option>
               </select>
             </label>
             <label>
               Priority
               <select value={priority} onChange={(e) => setPriority(e.target.value)}>
-                <option value="Medium">🟡 Medium</option>
-                <option value="High">High</option>
-                <option value="Low">Low</option>
+                <option value="Critical">🔥 Critical – Fix immediately</option>
+                <option value="High">🔴 High – Fix soon</option>
+                <option value="Medium">🟡 Medium – Normal priority</option>
+                <option value="Low">🟢 Low – Can wait</option>
               </select>
             </label>
           </div>
@@ -290,70 +306,29 @@ export function Dashboard({
             <label>
               Device
               <select value={device} onChange={(e) => setDevice(e.target.value)}>
-                <option value="">Select device</option>
-                <option value="Mac">Mac</option>
-                <option value="Windows">Windows</option>
-                <option value="Android">Android</option>
-                <option value="iOS">iOS</option>
-                <option value="Web">Web</option>
+                <option value="">📱 Select device</option>
+                <option value="iPhone">🍎 iPhone</option>
+                <option value="iPad">📱 iPad</option>
+                <option value="Android">🤖 Android</option>
+                <option value="Mac">💻 Mac</option>
+                <option value="Windows">🪟 Windows</option>
+                <option value="Linux">🐧 Linux</option>
+                <option value="Web">🌐 Web Browser</option>
+                <option value="Other">❓ Other</option>
               </select>
             </label>
             <label>
               Platform
               <select value={platform} onChange={(e) => setPlatform(e.target.value)}>
-                <option value="">Select platform</option>
-                <option value="Web">Web</option>
-                <option value="Mobile">Mobile</option>
-                <option value="Admin">Admin</option>
+                <option value="">🖥️ Select platform</option>
+                <option value="Web">🌐 Web</option>
+                <option value="Mobile">📱 Mobile App</option>
+                <option value="Admin">⚙️ Admin Portal</option>
+                <option value="API">🔌 API / Backend</option>
+                <option value="Desktop">💻 Desktop App</option>
               </select>
             </label>
           </div>
-
-          {/* <label>
-            Attachments
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="file-input-hidden"
-              onChange={(e) => onPickFile(e.target.files?.[0])}
-            />
-            {attachmentPreview ? (
-              <div className="upload has-file">
-                <img src={attachmentPreview} alt={attachmentName} className="attach-preview" />
-                <div className="attach-meta">
-                  <span>{attachmentName}</span>
-                  <div className="attach-actions">
-                    <button type="button" onClick={() => fileInputRef.current?.click()}>
-                      Replace
-                    </button>
-                    <button type="button" onClick={clearAttachment}>
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div
-                className="upload"
-                role="button"
-                tabIndex={0}
-                onClick={() => fileInputRef.current?.click()}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click();
-                }}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  onPickFile(e.dataTransfer.files?.[0]);
-                }}
-              >
-                <Upload size={16} /> Drag & drop files or click to upload
-                <br />
-                <small>Screenshots, logs, images (Max 10MB)</small>
-              </div>
-            )}
-          </label> */}
 
           <div className="submit-row">
             <button type="button" className="primary" onClick={createBug} disabled={submitting}>
