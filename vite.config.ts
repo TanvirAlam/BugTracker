@@ -397,7 +397,8 @@ async function updateBugIssue(payload: BugPayload, env: Record<string, string>) 
   if (!Number.isInteger(number) || number <= 0) {
     return { status: 400, body: { error: 'A valid issue number is required.' } };
   }
-  if (payload.action !== 'close-mistake' && payload.action !== 'reopen') {
+  const allowedActions = ['close-mistake', 'reopen', 'solved', 'not-solved'];
+  if (!allowedActions.includes(payload.action ?? '')) {
     return { status: 400, body: { error: 'Unsupported action.' } };
   }
 
@@ -409,9 +410,34 @@ async function updateBugIssue(payload: BugPayload, env: Record<string, string>) 
     'User-Agent': 'BugTracker',
   };
   const issueUrl = `${GITHUB_API}/repos/${project.repo}/issues/${number}`;
-  const label = payload.action === 'reopen' ? 'reopened' : 'mistakenly-created';
+
+  // "Not solved" keeps the issue open and records a verification comment instead.
+  if (payload.action === 'not-solved') {
+    try {
+      await fetch(`${issueUrl}/labels`, { method: 'POST', headers, body: JSON.stringify({ labels: ['not-solved'] }) });
+      const res = await fetch(`${issueUrl}/comments`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ body: 'Bug has been test and it is not solved!' }),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        return { status: res.status, body: { error: data?.message || 'GitHub rejected the comment.' } };
+      }
+      return { status: 200, body: { number, commented: true, url: data.html_url } };
+    } catch {
+      return { status: 502, body: { error: 'Could not reach GitHub. Check your network connection.' } };
+    }
+  }
+
+  const label =
+    payload.action === 'reopen' ? 'reopened' : payload.action === 'solved' ? 'solved' : 'mistakenly-created';
   const patchBody =
-    payload.action === 'reopen' ? { state: 'open' } : { state: 'closed', state_reason: 'not_planned' };
+    payload.action === 'reopen'
+      ? { state: 'open' }
+      : payload.action === 'solved'
+        ? { state: 'closed', state_reason: 'completed' }
+        : { state: 'closed', state_reason: 'not_planned' };
 
   try {
     await fetch(`${issueUrl}/labels`, { method: 'POST', headers, body: JSON.stringify({ labels: [label] }) });

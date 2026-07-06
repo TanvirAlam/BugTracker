@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bug, LogOut, Upload, Lock, Search, RotateCcw, Ban } from 'lucide-react';
+import { Bug, LogOut, Upload, Lock, Search, RotateCcw, Ban, CheckCircle2, XCircle } from 'lucide-react';
 import { deriveStatus, deriveSeverity, sprintLabel, timeAgo } from '../utils/bugs';
 import { PROJECTS } from '../projects';
 import { STATUS_TABS, type BugStatus, type IssueRow } from '../types/bug';
@@ -140,7 +140,11 @@ export function Dashboard({
     }
   }
 
-  async function updateBug(number: number, action: 'close-mistake' | 'reopen', reason?: string) {
+  async function updateBug(
+    number: number,
+    action: 'close-mistake' | 'reopen' | 'solved' | 'not-solved',
+    reason?: string,
+  ) {
     const payload: Record<string, unknown> = { project, number, action };
     if (reason && reason.trim()) {
       payload.reason = reason.trim();
@@ -508,18 +512,36 @@ export function Dashboard({
                                 <RotateCcw size={14} /> {busy ? '…' : 'Reopen'}
                               </button>
                             ) : (
-                              <button
-                                type="button"
-                                className="row-btn danger"
-                                disabled={busy || !!b.assignee || b.pr !== null}
-                                onClick={() => {
-                                  setConfirmAction('close-mistake');
-                                  setConfirmNumber(b.number);
-                                  setConfirmReason('');
-                                }}
-                              >
-                                <Ban size={14} /> {busy ? '…' : 'Close (mistake)'}
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  className="row-btn danger"
+                                  disabled={busy || !!b.assignee || b.pr !== null}
+                                  onClick={() => {
+                                    setConfirmAction('close-mistake');
+                                    setConfirmNumber(b.number);
+                                    setConfirmReason('');
+                                  }}
+                                >
+                                  <Ban size={14} /> {busy ? '…' : 'Close (mistake)'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="row-btn solved"
+                                  disabled={busy}
+                                  onClick={() => updateBug(b.number, 'solved')}
+                                >
+                                  <CheckCircle2 size={14} /> {busy ? '…' : 'SOLVED'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="row-btn notsolved"
+                                  disabled={busy}
+                                  onClick={() => updateBug(b.number, 'not-solved')}
+                                >
+                                  <XCircle size={14} /> {busy ? '…' : 'Not Solved'}
+                                </button>
+                              </>
                             )}
                           </td>
                         </tr>

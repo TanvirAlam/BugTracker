@@ -132,11 +132,21 @@ async function updateBugIssue(payload, env) {
   const { project, token } = resolved;
   const number = Number(payload.number);
   if (!Number.isInteger(number) || number <= 0) return { status: 400, body: { error: 'A valid issue number is required.' } };
-  if (payload.action !== 'close-mistake' && payload.action !== 'reopen') return { status: 400, body: { error: 'Unsupported action.' } };
+  const allowedActions = ['close-mistake', 'reopen', 'solved', 'not-solved'];
+  if (!allowedActions.includes(payload.action)) return { status: 400, body: { error: 'Unsupported action.' } };
   const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json', 'User-Agent': 'BugTracker' };
   const issueUrl = `${GITHUB_API}/repos/${project.repo}/issues/${number}`;
-  const label = payload.action === 'reopen' ? 'reopened' : 'mistakenly-created';
-  const patchBody = payload.action === 'reopen' ? { state: 'open' } : { state: 'closed' };
+  if (payload.action === 'not-solved') {
+    try {
+      await fetch(`${issueUrl}/labels`, { method: 'POST', headers, body: JSON.stringify({ labels: ['not-solved'] }) });
+      const res = await fetch(`${issueUrl}/comments`, { method: 'POST', headers, body: JSON.stringify({ body: 'Bug has been test and it is not solved!' }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { status: res.status, body: { error: data?.message || 'GitHub rejected the comment.' } };
+      return { status: 200, body: { number, commented: true, url: data.html_url } };
+    } catch { return { status: 502, body: { error: 'Could not reach GitHub.' } }; }
+  }
+  const label = payload.action === 'reopen' ? 'reopened' : payload.action === 'solved' ? 'solved' : 'mistakenly-created';
+  const patchBody = payload.action === 'reopen' ? { state: 'open' } : payload.action === 'solved' ? { state: 'closed', state_reason: 'completed' } : { state: 'closed' };
   try {
     await fetch(`${issueUrl}/labels`, { method: 'POST', headers, body: JSON.stringify({ labels: [label] }) });
     const res = await fetch(issueUrl, { method: 'PATCH', headers, body: JSON.stringify(patchBody) });
