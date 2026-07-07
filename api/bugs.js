@@ -99,6 +99,73 @@ async function listBugIssues(projectId, env) {
   return { status: 200, body: { repository: project.repo, name: project.name, issues } };
 }
 
+// Normalize a GitHub timeline entry to the compact shape the UI renders.
+// Unrecognized event types are dropped to keep the activity view focused.
+function mapTimelineItem(item) {
+  if (!item || !item.event) return null;
+  const event = item.event;
+  const createdAt = item.created_at || item.submitted_at || '';
+  if (!createdAt) return null;
+  const base = {
+    id: item.id ?? item.node_id ?? `${event}-${createdAt}`,
+    kind: event,
+    createdAt,
+    actor: item.actor?.login ?? item.user?.login ?? null,
+  };
+  switch (event) {
+    case 'commented':
+      return { ...base, actor: item.user?.login ?? null, body: item.body || '' };
+    case 'labeled':
+    case 'unlabeled':
+      return { ...base, label: item.label?.name || '' };
+    case 'renamed':
+      return { ...base, from: item.rename?.from || '', to: item.rename?.to || '' };
+    case 'assigned':
+    case 'unassigned':
+      return { ...base, assignee: item.assignee?.login || '' };
+    case 'milestoned':
+    case 'demilestoned':
+      return { ...base, label: item.milestone?.title || '' };
+    case 'cross-referenced':
+    case 'referenced': {
+      const issue = item.source?.issue;
+      return { ...base, source: issue ? { number: issue.number, url: issue.html_url, isPr: !!issue.pull_request } : null };
+    }
+    case 'closed':
+    case 'reopened':
+      return base;
+    default:
+      return null;
+  }
+}
+
+async function fetchIssueDetail(project, token, number) {
+  const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'BugTracker' };
+  const issueUrl = `${GITHUB_API}/repos/${project.repo}/issues/${number}`;
+  const [issueRes, timelineRes] = await Promise.all([
+    fetch(issueUrl, { headers }),
+    fetch(`${issueUrl}/timeline?per_page=100`, { headers }),
+  ]);
+  if (!issueRes.ok) {
+    const d = await issueRes.json().catch(() => ({}));
+    return { status: issueRes.status, body: { error: d?.message || `Could not load issue #${number}.` } };
+  }
+  const issue = await issueRes.json().catch(() => ({}));
+  let timeline = [];
+  if (timelineRes.ok) {
+    const raw = await timelineRes.json().catch(() => []);
+    timeline = (Array.isArray(raw) ? raw : []).map(mapTimelineItem).filter(Boolean);
+  }
+  return { status: 200, body: { number: issue.number, body: issue.body || '', author: issue.user?.login ?? null, createdAt: issue.created_at, timeline } };
+}
+
+async function getIssueDetail(projectId, number, env) {
+  const resolved = resolveRepo(projectId, env);
+  if ('error' in resolved) return resolved.error;
+  if (!Number.isInteger(number) || number <= 0) return { status: 400, body: { error: 'A valid issue number is required.' } };
+  try { return await fetchIssueDetail(resolved.project, resolved.token, number); } catch { return { status: 502, body: { error: 'Could not reach GitHub.' } }; }
+}
+
 async function createBugIssue(payload, env) {
   const resolved = resolveRepo(payload.project, env);
   if ('error' in resolved) return resolved.error;
@@ -166,7 +233,10 @@ export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       const url = new URL(req.url || '', 'http://localhost');
-      const result = await listBugIssues(url.searchParams.get('project'), process.env);
+      const numberParam = url.searchParams.get('number');
+      const result = numberParam
+        ? await getIssueDetail(url.searchParams.get('project'), Number(numberParam), process.env)
+        : await listBugIssues(url.searchParams.get('project'), process.env);
       res.statusCode = result.status; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(result.body));
     } else if (req.method === 'POST') {
       const body = await readJsonBody(req); const result = await createBugIssue(body, process.env);

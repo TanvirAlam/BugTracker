@@ -1,8 +1,20 @@
 import React from 'react';
-import { Bug, LogOut, Upload, Lock, Search, RotateCcw, Ban, CheckCircle2, XCircle } from 'lucide-react';
+import {
+  Bug,
+  LogOut,
+  Upload,
+  Lock,
+  Search,
+  RotateCcw,
+  Ban,
+  CheckCircle2,
+  XCircle,
+  ChevronRight,
+  ChevronDown,
+} from 'lucide-react';
 import { deriveStatus, deriveSeverity, sprintLabel, timeAgo } from '../utils/bugs';
 import { PROJECTS } from '../projects';
-import { STATUS_TABS, type BugStatus, type IssueRow } from '../types/bug';
+import { STATUS_TABS, type BugStatus, type IssueRow, type IssueDetail, type TimelineItem } from '../types/bug';
 import type { ProjectId } from '../projects';
 
 type FormResult = { ok: boolean; message: string; url?: string };
@@ -44,6 +56,10 @@ export function Dashboard({
   const [confirmAction, setConfirmAction] = React.useState<'close-mistake' | 'reopen' | 'not-solved' | null>(null);
   const [confirmNumber, setConfirmNumber] = React.useState<number | null>(null);
   const [confirmReason, setConfirmReason] = React.useState('');
+  const [expanded, setExpanded] = React.useState<Set<number>>(() => new Set());
+  const [details, setDetails] = React.useState<Record<number, IssueDetail>>({});
+  const [detailLoading, setDetailLoading] = React.useState<Record<number, boolean>>({});
+  const [detailError, setDetailError] = React.useState<Record<number, string>>({});
 
   const loadBugs = React.useCallback(async (projectId: string) => {
     if (!projectId) {
@@ -67,11 +83,56 @@ export function Dashboard({
     }
   }, []);
 
+  // Lazily fetch an issue's full activity (original report + comments +
+  // state/label events) the first time its row is expanded.
+  const loadDetail = React.useCallback(
+    async (number: number) => {
+      if (!project) return;
+      setDetailLoading((prev) => ({ ...prev, [number]: true }));
+      setDetailError((prev) => {
+        const next = { ...prev };
+        delete next[number];
+        return next;
+      });
+      try {
+        const res = await fetch(`/api/bugs?project=${encodeURIComponent(project)}&number=${number}`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `Failed to load activity (${res.status}).`);
+        setDetails((prev) => ({ ...prev, [number]: data as IssueDetail }));
+      } catch (err) {
+        setDetailError((prev) => ({
+          ...prev,
+          [number]: err instanceof Error ? err.message : 'Failed to load activity.',
+        }));
+      } finally {
+        setDetailLoading((prev) => ({ ...prev, [number]: false }));
+      }
+    },
+    [project],
+  );
+
+  const toggleExpand = (number: number) => {
+    const willOpen = !expanded.has(number);
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(number)) next.delete(number);
+      else next.add(number);
+      return next;
+    });
+    if (willOpen && !details[number] && !detailLoading[number]) {
+      void loadDetail(number);
+    }
+  };
+
   React.useEffect(() => {
     setPage(1);
   }, [query, activeTab]);
 
   React.useEffect(() => {
+    setExpanded(new Set());
+    setDetails({});
+    setDetailError({});
+    setDetailLoading({});
     loadBugs(project);
   }, [project, loadBugs]);
 
@@ -162,6 +223,14 @@ export function Dashboard({
         setActionError(data.error || `Request failed (${res.status}).`);
       } else {
         await loadBugs(project);
+        // The action added a comment or changed state, so drop the cached
+        // activity for this issue and refetch it when its row is expanded.
+        setDetails((prev) => {
+          const next = { ...prev };
+          delete next[number];
+          return next;
+        });
+        if (expanded.has(number)) void loadDetail(number);
       }
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Network error \u2014 is the server running?');
@@ -379,6 +448,7 @@ export function Dashboard({
             <table>
               <thead>
                 <tr>
+                  <th className="expand-col" aria-hidden="true"></th>
                   <th>Bug ID</th>
                   <th>Title</th>
                   <th>Assignee</th>
@@ -393,19 +463,19 @@ export function Dashboard({
               <tbody>
                 {!projectId ? (
                   <tr>
-                    <td className="bugs-note" colSpan={9}>
+                    <td className="bugs-note" colSpan={10}>
                       Select a project to view its issues.
                     </td>
                   </tr>
                 ) : bugsLoading ? (
                   <tr>
-                    <td className="bugs-note" colSpan={9}>
+                    <td className="bugs-note" colSpan={10}>
                       Loading issues…
                     </td>
                   </tr>
                 ) : bugsError ? (
                   <tr>
-                    <td className="bugs-note err" colSpan={9}>
+                    <td className="bugs-note err" colSpan={10}>
                       {bugsError}
                     </td>
                   </tr>
@@ -427,7 +497,7 @@ export function Dashboard({
                     if (filtered.length === 0) {
                       return (
                         <tr>
-                          <td className="bugs-note" colSpan={9}>
+                          <td className="bugs-note" colSpan={10}>
                             No issues found.
                           </td>
                         </tr>
@@ -437,8 +507,22 @@ export function Dashboard({
                       const status = deriveStatus(b);
                       const sev = deriveSeverity(b);
                       const busy = actingNumber === b.number;
+                      const isOpen = expanded.has(b.number);
                       return (
-                        <tr key={b.number}>
+                        <React.Fragment key={b.number}>
+                        <tr className={isOpen ? 'bug-row expanded' : 'bug-row'}>
+                          <td className="expand-cell">
+                            <button
+                              type="button"
+                              className="expand-btn"
+                              aria-expanded={isOpen}
+                              aria-label={isOpen ? `Hide details for issue #${b.number}` : `Show details for issue #${b.number}`}
+                              title={isOpen ? 'Hide details' : 'Show details'}
+                              onClick={() => toggleExpand(b.number)}
+                            >
+                              {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                            </button>
+                          </td>
                           <td className="bug-id" data-label="Bug ID">
                             #{b.number}
                           </td>
@@ -549,6 +633,19 @@ export function Dashboard({
                             )}
                           </td>
                         </tr>
+                        {isOpen && (
+                          <tr className="detail-row">
+                            <td colSpan={10}>
+                              <BugDetails
+                                loading={!!detailLoading[b.number]}
+                                error={detailError[b.number]}
+                                detail={details[b.number]}
+                                url={b.url}
+                              />
+                            </td>
+                          </tr>
+                        )}
+                        </React.Fragment>
                       );
                     });
                   })()
@@ -721,6 +818,163 @@ export function Dashboard({
           </div>
         )}
       </main>
+    </div>
+  );
+}
+
+function fullTimestamp(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString();
+}
+
+function BugDetails({
+  loading,
+  error,
+  detail,
+  url,
+}: {
+  loading: boolean;
+  error?: string;
+  detail?: IssueDetail;
+  url: string;
+}) {
+  if (loading) {
+    return (
+      <div className="issue-detail">
+        <p className="detail-note">Loading activity…</p>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="issue-detail">
+        <p className="detail-note err">{error}</p>
+      </div>
+    );
+  }
+  if (!detail) {
+    return (
+      <div className="issue-detail">
+        <p className="detail-note">No details available.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="issue-detail">
+      <div className="timeline">
+        <div className="tl-item">
+          <span className="tl-dot report" />
+          <div className="tl-body">
+            <div className="tl-head">
+              <strong>{detail.author || 'Someone'}</strong> opened this issue
+              <span className="tl-time" title={fullTimestamp(detail.createdAt)}>
+                {timeAgo(detail.createdAt)}
+              </span>
+            </div>
+            <div className="tl-comment-body">
+              {detail.body.trim() ? detail.body : 'No description provided.'}
+            </div>
+          </div>
+        </div>
+        {detail.timeline.map((item) => (
+          <TimelineRow key={String(item.id)} item={item} />
+        ))}
+      </div>
+      <a className="issue-detail-link" href={url} target="_blank" rel="noreferrer">
+        View full issue on GitHub ↗
+      </a>
+    </div>
+  );
+}
+
+function TimelineRow({ item }: { item: TimelineItem }) {
+  const who = <strong>{item.actor || 'Someone'}</strong>;
+  const time = (
+    <span className="tl-time" title={fullTimestamp(item.createdAt)}>
+      {timeAgo(item.createdAt)}
+    </span>
+  );
+
+  if (item.kind === 'commented') {
+    return (
+      <div className="tl-item">
+        <span className="tl-dot comment" />
+        <div className="tl-body">
+          <div className="tl-head">
+            {who} commented {time}
+          </div>
+          <div className="tl-comment-body">
+            {item.body && item.body.trim() ? item.body : '(empty comment)'}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  let text: React.ReactNode;
+  switch (item.kind) {
+    case 'labeled':
+      text = (
+        <>
+          {' '}added the <span className="tl-label">{item.label}</span> label
+        </>
+      );
+      break;
+    case 'unlabeled':
+      text = (
+        <>
+          {' '}removed the <span className="tl-label">{item.label}</span> label
+        </>
+      );
+      break;
+    case 'closed':
+      text = <>{' '}closed this issue</>;
+      break;
+    case 'reopened':
+      text = <>{' '}reopened this issue</>;
+      break;
+    case 'renamed':
+      text = <>{' '}renamed this issue</>;
+      break;
+    case 'assigned':
+      text = <>{' '}assigned {item.assignee || 'someone'}</>;
+      break;
+    case 'unassigned':
+      text = <>{' '}unassigned {item.assignee || 'someone'}</>;
+      break;
+    case 'milestoned':
+      text = <>{' '}added this to the {item.label || 'milestone'} milestone</>;
+      break;
+    case 'demilestoned':
+      text = <>{' '}removed this from the {item.label || 'milestone'} milestone</>;
+      break;
+    case 'cross-referenced':
+    case 'referenced':
+      text = item.source ? (
+        <>
+          {' '}referenced this in{' '}
+          <a href={item.source.url} target="_blank" rel="noreferrer">
+            #{item.source.number}
+          </a>
+        </>
+      ) : (
+        <>{' '}referenced this issue</>
+      );
+      break;
+    default:
+      text = <>{' '}{item.kind.replace(/[-_]/g, ' ')}</>;
+      break;
+  }
+
+  return (
+    <div className="tl-item tl-event">
+      <span className="tl-dot event" />
+      <div className="tl-body">
+        <div className="tl-head">
+          {who}
+          {text} {time}
+        </div>
+      </div>
     </div>
   );
 }

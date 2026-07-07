@@ -389,6 +389,96 @@ async function listBugIssues(projectId: string | null, env: Record<string, strin
   return { status: 200, body: { repository: project.repo, name: project.name, issues } };
 }
 
+// Only a handful of timeline event types are meaningful to a tester. Everything
+// else (subscribed, mentioned, etc.) is dropped to keep the activity view clean.
+function mapTimelineItem(item: any) {
+  if (!item || !item.event) return null;
+  const event: string = item.event;
+  const createdAt: string = item.created_at || item.submitted_at || '';
+  if (!createdAt) return null;
+  const base = {
+    id: item.id ?? item.node_id ?? `${event}-${createdAt}`,
+    kind: event,
+    createdAt,
+    actor: item.actor?.login ?? item.user?.login ?? null,
+  };
+  switch (event) {
+    case 'commented':
+      return { ...base, actor: item.user?.login ?? null, body: item.body || '' };
+    case 'labeled':
+    case 'unlabeled':
+      return { ...base, label: item.label?.name || '' };
+    case 'renamed':
+      return { ...base, from: item.rename?.from || '', to: item.rename?.to || '' };
+    case 'assigned':
+    case 'unassigned':
+      return { ...base, assignee: item.assignee?.login || '' };
+    case 'milestoned':
+    case 'demilestoned':
+      return { ...base, label: item.milestone?.title || '' };
+    case 'cross-referenced':
+    case 'referenced': {
+      const issue = item.source?.issue;
+      return {
+        ...base,
+        source: issue ? { number: issue.number, url: issue.html_url, isPr: !!issue.pull_request } : null,
+      };
+    }
+    case 'closed':
+    case 'reopened':
+      return base;
+    default:
+      return null;
+  }
+}
+
+async function fetchIssueDetail(project: Repo, token: string, number: number) {
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    'User-Agent': 'BugTracker',
+  };
+  const issueUrl = `${GITHUB_API}/repos/${project.repo}/issues/${number}`;
+  const [issueRes, timelineRes] = await Promise.all([
+    fetch(issueUrl, { headers }),
+    fetch(`${issueUrl}/timeline?per_page=100`, { headers }),
+  ]);
+  if (!issueRes.ok) {
+    const d: any = await issueRes.json().catch(() => ({}));
+    return { status: issueRes.status, body: { error: d?.message || `Could not load issue #${number}.` } };
+  }
+  const issue: any = await issueRes.json().catch(() => ({}));
+  let timeline: any[] = [];
+  if (timelineRes.ok) {
+    const raw: any = await timelineRes.json().catch(() => []);
+    timeline = (Array.isArray(raw) ? raw : []).map(mapTimelineItem).filter(Boolean);
+  }
+  return {
+    status: 200,
+    body: {
+      number: issue.number,
+      body: issue.body || '',
+      author: issue.user?.login ?? null,
+      createdAt: issue.created_at,
+      timeline,
+    },
+  };
+}
+
+async function getIssueDetail(projectId: string | null, number: number, env: Record<string, string>) {
+  const resolved = resolveRepo(projectId, env);
+  if ('error' in resolved) return resolved.error;
+  if (!Number.isInteger(number) || number <= 0) {
+    return { status: 400, body: { error: 'A valid issue number is required.' } };
+  }
+  try {
+    return await fetchIssueDetail(resolved.project, resolved.token, number);
+  } catch {
+    return { status: 502, body: { error: 'Could not reach GitHub. Check your network connection.' } };
+  }
+}
+
 async function updateBugIssue(payload: BugPayload, env: Record<string, string>) {
   const resolved = resolveRepo(payload.project, env);
   if ('error' in resolved) return resolved.error;
@@ -496,7 +586,10 @@ function bugApiPlugin(env: Record<string, string>): Plugin {
         try {
           if (req.method === 'GET') {
             const url = new URL(req.url || '', 'http://localhost');
-            const result = await listBugIssues(url.searchParams.get('project'), env);
+            const numberParam = url.searchParams.get('number');
+            const result = numberParam
+              ? await getIssueDetail(url.searchParams.get('project'), Number(numberParam), env)
+              : await listBugIssues(url.searchParams.get('project'), env);
             sendJson(res, result.status, result.body);
           } else if (req.method === 'POST') {
             const payload = await readJsonBody(req);
