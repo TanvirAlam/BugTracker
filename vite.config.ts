@@ -23,6 +23,7 @@ type BugPayload = {
   platform?: string;
   number?: number;
   action?: string;
+  reason?: string;
   name?: string;
   attachmentName?: string;
   attachmentContent?: string;
@@ -413,12 +414,16 @@ async function updateBugIssue(payload: BugPayload, env: Record<string, string>) 
 
   // "Not solved" keeps the issue open and records a verification comment instead.
   if (payload.action === 'not-solved') {
+    const reason = (payload.reason || '').trim();
+    const commentBody = reason
+      ? `**Not solved after testing:**\n\n${reason}`
+      : 'Bug has been tested and it is not solved!';
     try {
       await fetch(`${issueUrl}/labels`, { method: 'POST', headers, body: JSON.stringify({ labels: ['not-solved'] }) });
       const res = await fetch(`${issueUrl}/comments`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ body: 'Bug has been test and it is not solved!' }),
+        body: JSON.stringify({ body: commentBody }),
       });
       const data: any = await res.json().catch(() => ({}));
       if (!res.ok) {

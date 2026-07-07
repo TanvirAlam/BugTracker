@@ -41,7 +41,7 @@ export function Dashboard({
   const [attachmentPreview, setAttachmentPreview] = React.useState('');
   const [attachmentContent, setAttachmentContent] = React.useState('');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
-  const [confirmAction, setConfirmAction] = React.useState<'close-mistake' | 'reopen' | null>(null);
+  const [confirmAction, setConfirmAction] = React.useState<'close-mistake' | 'reopen' | 'not-solved' | null>(null);
   const [confirmNumber, setConfirmNumber] = React.useState<number | null>(null);
   const [confirmReason, setConfirmReason] = React.useState('');
 
@@ -537,7 +537,11 @@ export function Dashboard({
                                   type="button"
                                   className="row-btn notsolved"
                                   disabled={busy}
-                                  onClick={() => updateBug(b.number, 'not-solved')}
+                                  onClick={() => {
+                                    setConfirmAction('not-solved');
+                                    setConfirmNumber(b.number);
+                                    setConfirmReason('');
+                                  }}
                                 >
                                   <XCircle size={14} /> {busy ? '…' : 'Not Solved'}
                                 </button>
@@ -663,21 +667,31 @@ export function Dashboard({
             }}
           >
             <div className="modal" role="dialog" aria-modal="true" tabIndex={-1}>
-              <h3>{confirmAction === 'reopen' ? 'Reopen Issue' : 'Close Issue'}</h3>
+              <h3>
+                {confirmAction === 'reopen'
+                  ? 'Reopen Issue'
+                  : confirmAction === 'not-solved'
+                    ? 'Mark as Not Solved'
+                    : 'Close Issue'}
+              </h3>
               <p>
                 {confirmAction === 'reopen'
                   ? 'Are you sure you want to reopen this issue?'
-                  : 'Are you sure this was closed by mistake?'}
+                  : confirmAction === 'not-solved'
+                    ? 'Describe what happened when you tested this bug. Your note is saved as a comment on the issue.'
+                    : 'Are you sure this was closed by mistake?'}
               </p>
               <label>
-                Reason *
+                {confirmAction === 'not-solved' ? 'What happened? *' : 'Reason *'}
                 <textarea
                   value={confirmReason}
                   onChange={(e) => setConfirmReason(e.target.value)}
                   placeholder={
                     confirmAction === 'reopen'
                       ? 'Why should this be reopened?'
-                      : 'Why was this closed by mistake?'
+                      : confirmAction === 'not-solved'
+                        ? 'What did you do, what did you expect, and what actually happened?'
+                        : 'Why was this closed by mistake?'
                   }
                   rows={3}
                 />

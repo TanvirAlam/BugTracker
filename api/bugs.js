@@ -137,9 +137,11 @@ async function updateBugIssue(payload, env) {
   const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json', 'User-Agent': 'BugTracker' };
   const issueUrl = `${GITHUB_API}/repos/${project.repo}/issues/${number}`;
   if (payload.action === 'not-solved') {
+    const reason = (payload.reason || '').trim();
+    const commentBody = reason ? `**Not solved after testing:**\n\n${reason}` : 'Bug has been tested and it is not solved!';
     try {
       await fetch(`${issueUrl}/labels`, { method: 'POST', headers, body: JSON.stringify({ labels: ['not-solved'] }) });
-      const res = await fetch(`${issueUrl}/comments`, { method: 'POST', headers, body: JSON.stringify({ body: 'Bug has been test and it is not solved!' }) });
+      const res = await fetch(`${issueUrl}/comments`, { method: 'POST', headers, body: JSON.stringify({ body: commentBody }) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) return { status: res.status, body: { error: data?.message || 'GitHub rejected the comment.' } };
       return { status: 200, body: { number, commented: true, url: data.html_url } };
